@@ -9,7 +9,7 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -117,7 +117,9 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none"
+                  className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl 
+focus:ring-2 focus:ring-slate-500 focus:border-transparent 
+outline-none text-slate-900 placeholder:text-slate-400"
                   disabled={loading}
                 />
               </div>
@@ -132,7 +134,9 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  className="w-full pl-11 pr-12 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none"
+                  className="w-full pl-11 pr-12 py-3 border border-slate-300 rounded-xl 
+focus:ring-2 focus:ring-slate-500 focus:border-transparent 
+outline-none text-slate-900 placeholder:text-slate-400"
                   disabled={loading}
                 />
                 <button
