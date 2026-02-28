@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import * as XLSX from 'xlsx';
 import {
@@ -20,7 +20,12 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
-  Undo2
+  Undo2,
+  ChevronDown,
+  User,
+  Package,
+  Tag,
+  Calendar
 } from 'lucide-react';
 
 // ============================================
@@ -33,8 +38,8 @@ interface AMC {
   customer_name: string;
   phone: string;
   location: string;
-  amc_type: 'CCTV' | 'Biometric' | 'Access Control' | 'Automation';
-  amc_category: 'Comprehensive' | 'Non-comprehensive';
+  amc_type: 'CCTV' | 'Biometric' | 'Access Control' | 'Automation' | 'Software';
+  amc_category: 'Comprehensive' | 'Non-comprehensive' | 'Cloud';
   invoice_number: string;
   scope_of_work: string;
   start_date: string;
@@ -59,8 +64,8 @@ interface FormData {
   customer_name: string;
   phone: string;
   location: string;
-  amc_type: 'CCTV' | 'Biometric' | 'Access Control' | 'Automation';
-  amc_category: 'Comprehensive' | 'Non-comprehensive';
+  amc_type: 'CCTV' | 'Biometric' | 'Access Control' | 'Automation' | 'Software';
+  amc_category: 'Comprehensive' | 'Non-comprehensive' | 'Cloud';
   invoice_number: string;
   scope_of_work: string;
   start_date: string;
@@ -107,6 +112,21 @@ export default function AMCPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAMCs, setSelectedAMCs] = useState<number[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<number[]>([]);
+
+  // ===== NEW: Custom dropdown state =====
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null); // 'status' | 'type' | 'category' | null
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Click outside handler for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // PAGINATION STATES
   const [currentPage, setCurrentPage] = useState(1);
@@ -393,10 +413,10 @@ export default function AMCPage() {
               customer_name: normalized['customer_name'] || normalized['customer'] || '',
               phone: String(normalized['phone'] || ''),
               location: normalized['location'] || '',
-              amc_type: ['CCTV', 'Biometric', 'Access Control', 'Automation'].includes(normalized['amc_type'])
+              amc_type: ['CCTV', 'Biometric', 'Access Control', 'Automation','Software'].includes(normalized['amc_type'])
                 ? normalized['amc_type']
                 : 'CCTV',
-              amc_category: ['Comprehensive', 'Non-comprehensive'].includes(normalized['amc_category'])
+              amc_category: ['Comprehensive', 'Non-comprehensive','Cloud'].includes(normalized['amc_category'])
                 ? normalized['amc_category']
                 : 'Comprehensive',
               invoice_number: normalized['invoice_number'] || normalized['invoice'] || '',
@@ -604,8 +624,6 @@ export default function AMCPage() {
     });
   };
 
-
-
   // ============================================
   // BULK OPERATIONS
   // ============================================
@@ -660,8 +678,6 @@ export default function AMCPage() {
     });
   };
 
-
-
   const handleSelectAll = () => {
     const currentDataSource = showTrash ? trashedAMCs : amcs;
     const currentFiltered = showTrash ? filteredTrashAMCs : filteredAMCs;
@@ -713,9 +729,12 @@ export default function AMCPage() {
   };
 
   const getCategoryColor = (category: string) => {
-    return category === 'Comprehensive'
-      ? 'bg-purple-50 text-purple-700 border border-purple-200'
-      : 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+    const colors: Record<string, string> = {
+      'Comprehensive': 'bg-purple-50 text-purple-700 border border-purple-200',
+      'Non-comprehensive': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+      'Cloud': 'bg-sky-50 text-sky-700 border border-sky-200'
+    };
+    return colors[category] || 'bg-gray-50 text-gray-700 border border-gray-200';
   };
 
   // ============================================
@@ -996,7 +1015,7 @@ export default function AMCPage() {
                       name="customer_name"
                       value={formData.customer_name}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter customer name"
                       required
                     />
@@ -1008,7 +1027,7 @@ export default function AMCPage() {
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter phone number"
                       required
                     />
@@ -1020,7 +1039,7 @@ export default function AMCPage() {
                       name="location"
                       value={formData.location}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter location/address"
                       required
                     />
@@ -1032,7 +1051,7 @@ export default function AMCPage() {
                       name="invoice_number"
                       value={formData.invoice_number}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900 "
                       placeholder="Enter invoice number"
                       required
                     />
@@ -1049,6 +1068,7 @@ export default function AMCPage() {
                       <option value="Biometric">Biometric</option>
                       <option value="Access Control">Access Control</option>
                       <option value="Automation">Automation</option>
+                      <option value="Software">Software</option>
                     </select>
                   </div>
                   <div>
@@ -1061,6 +1081,7 @@ export default function AMCPage() {
                     >
                       <option value="Comprehensive">Comprehensive</option>
                       <option value="Non-comprehensive">Non-comprehensive</option>
+                      <option value="Cloud">Cloud</option>
                     </select>
                   </div>
                   <div>
@@ -1070,7 +1091,7 @@ export default function AMCPage() {
                       name="start_date"
                       value={formData.start_date}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700 "
                       required
                     />
                   </div>
@@ -1087,7 +1108,6 @@ export default function AMCPage() {
            text-gray-900 bg-white
            placeholder-gray-400
            focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-
                       placeholder="Select Months"
                       required
                     />
@@ -1099,7 +1119,7 @@ export default function AMCPage() {
                       value={formData.scope_of_work}
                       onChange={handleInputChange}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Describe the scope of work/maintenance"
                       required
                     />
@@ -1111,7 +1131,7 @@ export default function AMCPage() {
                       value={formData.covered_devices}
                       onChange={handleInputChange}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="List the devices covered under AMC"
                       required
                     />
@@ -1123,7 +1143,7 @@ export default function AMCPage() {
                       value={formData.serial_numbers}
                       onChange={handleInputChange}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter serial numbers separated by commas"
                     />
                   </div>
@@ -1134,7 +1154,7 @@ export default function AMCPage() {
                       value={formData.remarks}
                       onChange={handleInputChange}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Additional notes or comments"
                     />
                   </div>
@@ -1348,71 +1368,184 @@ export default function AMCPage() {
             </div>
           </div>
 
-          {/* Filter Section (Only show when not in trash) */}
+          {/* ===== AESTHETIC FILTER SECTION – FULLY CUSTOM DROPDOWNS ===== */}
           {showFilters && !showTrash && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                <select
-                  name="amc_status"
-                  value={filters.amc_status}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                >
-                  <option value="">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Expired">Expired</option>
-                  <option value="Upcoming">Upcoming</option>
-                </select>
-                <input
-                  type="text"
-                  name="customer_name"
-                  placeholder="Customer"
-                  value={filters.customer_name}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                />
-                <select
-                  name="amc_type"
-                  value={filters.amc_type}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                >
-                  <option value="">All Types</option>
-                  <option value="CCTV">CCTV</option>
-                  <option value="Biometric">Biometric</option>
-                  <option value="Access Control">Access Control</option>
-                  <option value="Automation">Automation</option>
-                </select>
-                <select
-                  name="amc_category"
-                  value={filters.amc_category}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                >
-                  <option value="">All Categories</option>
-                  <option value="Comprehensive">Comprehensive</option>
-                  <option value="Non-comprehensive">Non-comprehensive</option>
-                </select>
-                <input
-                  type="date"
-                  name="date_from"
-                  value={filters.date_from}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                />
-                <input
-                  type="date"
-                  name="date_to"
-                  value={filters.date_to}
-                  onChange={handleFilterChange}
-                  className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                />
-                <button
-                  onClick={clearFilters}
-                  className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium"
-                >
-                  Clear
-                </button>
+            <div className="mt-4 pt-4 border-t border-gray-200" ref={dropdownRef}>
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 shadow-sm border border-orange-100">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <Filter size={16} className="text-orange-500" />
+                  Filter AMCs
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+
+                  {/* STATUS CUSTOM DROPDOWN */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
+                      <AlertCircle size={14} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                      className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    >
+                      <span className="truncate">
+                        {filters.amc_status ? filters.amc_status : 'All Status'}
+                      </span>
+                      <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'status' ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {openDropdown === 'status' && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
+                        {['', 'Active', 'Expired', 'Upcoming'].map((value) => (
+                          <button
+                            key={value || 'all'}
+                            onClick={() => {
+                              handleFilterChange({ target: { name: 'amc_status', value } } as any);
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
+                              filters.amc_status === value
+                                ? 'bg-orange-100 text-orange-700 font-medium'
+                                : 'text-gray-700'
+                            }`}
+                          >
+                            {value === '' ? 'All Status' : value}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CUSTOMER NAME INPUT */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
+                      <User size={14} />
+                    </div>
+                    <input
+                      type="text"
+                      name="customer_name"
+                      placeholder="Customer"
+                      value={filters.customer_name}
+                      onChange={handleFilterChange}
+                      className="w-full pl-8 pr-3 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  {/* AMC TYPE CUSTOM DROPDOWN */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
+                      <Package size={14} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdown(openDropdown === 'type' ? null : 'type')}
+                      className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    >
+                      <span className="truncate">
+                        {filters.amc_type ? filters.amc_type : 'All Types'}
+                      </span>
+                      <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'type' ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {openDropdown === 'type' && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
+                        {['', 'CCTV', 'Biometric', 'Access Control', 'Automation', 'Software'].map((value) => (
+                          <button
+                            key={value || 'all'}
+                            onClick={() => {
+                              handleFilterChange({ target: { name: 'amc_type', value } } as any);
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
+                              filters.amc_type === value
+                                ? 'bg-orange-100 text-orange-700 font-medium'
+                                : 'text-gray-700'
+                            }`}
+                          >
+                            {value === '' ? 'All Types' : value}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* AMC CATEGORY CUSTOM DROPDOWN */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
+                      <Tag size={14} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdown(openDropdown === 'category' ? null : 'category')}
+                      className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    >
+                      <span className="truncate">
+                        {filters.amc_category ? filters.amc_category : 'All Categories'}
+                      </span>
+                      <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'category' ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {openDropdown === 'category' && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
+                        {['', 'Comprehensive', 'Non-comprehensive', 'Cloud'].map((value) => (
+                          <button
+                            key={value || 'all'}
+                            onClick={() => {
+                              handleFilterChange({ target: { name: 'amc_category', value } } as any);
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
+                              filters.amc_category === value
+                                ? 'bg-orange-100 text-orange-700 font-medium'
+                                : 'text-gray-700'
+                            }`}
+                          >
+                            {value === '' ? 'All Categories' : value}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DATE FROM */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
+                      <Calendar size={14} />
+                    </div>
+                    <input
+                      type="date"
+                      name="date_from"
+                      value={filters.date_from}
+                      onChange={handleFilterChange}
+                      className="w-full pl-8 pr-3 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  {/* DATE TO */}
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
+                      <Calendar size={14} />
+                    </div>
+                    <input
+                      type="date"
+                      name="date_to"
+                      value={filters.date_to}
+                      onChange={handleFilterChange}
+                      className="w-full pl-8 pr-3 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                <div className="flex justify-end mt-3">
+                  <button
+                    onClick={clearFilters}
+                    className="px-4 py-2 bg-white border border-orange-200 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 hover:border-orange-300 transition-all flex items-center gap-1.5 shadow-sm"
+                  >
+                    <X size={14} />
+                    Clear all filters
+                  </button>
+                </div>
               </div>
             </div>
           )}
