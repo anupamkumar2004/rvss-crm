@@ -58,6 +58,15 @@ interface AMC {
   deleted: boolean;
   deleted_at: string | null;
   created_at?: string;
+  // New fields
+  amc_amount?: number;
+  amount_paid?: number;
+  pending_amount?: number;
+  payment_mode?: string;
+  payment_status?: string;
+  port_number?: string;
+  employee_limit?: number;
+  device_limit?: number;
 }
 
 interface FormData {
@@ -73,6 +82,14 @@ interface FormData {
   covered_devices: string;
   serial_numbers: string;
   remarks: string;
+  // New fields
+  amc_amount: string;
+  amount_paid: string;
+  payment_mode: 'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Card' | '';
+  payment_status: 'Pending' | 'Received' | 'Failed' | '';
+  port_number: string;
+  employee_limit: string;
+  device_limit: string;
 }
 
 interface Filters {
@@ -113,8 +130,8 @@ export default function AMCPage() {
   const [selectedAMCs, setSelectedAMCs] = useState<number[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<number[]>([]);
 
-  // ===== NEW: Custom dropdown state =====
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null); // 'status' | 'type' | 'category' | null
+  // Custom dropdown state
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Click outside handler for dropdowns
@@ -155,7 +172,15 @@ export default function AMCPage() {
     duration: '12',
     covered_devices: '',
     serial_numbers: '',
-    remarks: ''
+    remarks: '',
+    // New fields
+    amc_amount: '',
+    amount_paid: '',
+    payment_mode: '',
+    payment_status: '',
+    port_number: '',
+    employee_limit: '',
+    device_limit: ''
   });
 
   // Fix hydration issue
@@ -231,7 +256,6 @@ export default function AMCPage() {
     try {
       setLoading(true);
 
-      // ✅ 1. Get logged-in user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
       if (userError || !user) {
@@ -241,7 +265,6 @@ export default function AMCPage() {
         return;
       }
 
-      // ✅ 2. Fetch ACTIVE AMCs (deleted = false)
       const { data: activeData, error: activeError } = await supabase
         .from('amc')
         .select('*')
@@ -250,10 +273,8 @@ export default function AMCPage() {
         .order('created_at', { ascending: false });
 
       if (activeError) throw activeError;
-
       setAmcs(activeData || []);
 
-      // ✅ 3. Fetch TRASHED AMCs (deleted = true, last 7 days only)
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -266,7 +287,6 @@ export default function AMCPage() {
         .order('deleted_at', { ascending: false });
 
       if (trashedError) throw trashedError;
-
       setTrashedAMCs(trashedData || []);
 
     } catch (error: any) {
@@ -277,7 +297,6 @@ export default function AMCPage() {
     }
   };
 
-  // AUTO DELETE records older than 7 days (PERMANENT DELETE)
   const autoDeleteOldRecords = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -286,7 +305,6 @@ export default function AMCPage() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      // PERMANENT DELETE records marked as deleted and older than 7 days
       const { error } = await supabase
         .from('amc')
         .delete()
@@ -294,18 +312,14 @@ export default function AMCPage() {
         .eq('deleted', true)
         .lt('deleted_at', sevenDaysAgo.toISOString());
 
-      if (error) {
-        console.error('Auto-delete error:', error);
-      } else {
-        console.log('Old deleted records auto-cleaned');
-      }
+      if (error) console.error('Auto-delete error:', error);
     } catch (error) {
       console.error('Auto-delete error:', error);
     }
   };
 
   // ============================================
-  // EXPORT FUNCTIONS
+  // EXPORT FUNCTIONS (Excel & CSV)
   // ============================================
 
   const handleExportExcel = () => {
@@ -320,13 +334,26 @@ export default function AMCPage() {
         'Invoice Number': amc.invoice_number,
         'Start Date': amc.start_date,
         'End Date': amc.end_date,
-        'Duration': amc.duration,
+        'Duration (months)': amc.duration,
         'Status': amc.amc_status,
         'Scope of Work': amc.scope_of_work,
         'Covered Devices': amc.covered_devices,
+        'Serial Numbers': amc.serial_numbers,
         'Total Visits': amc.total_visits_allowed,
         'Visits Used': amc.visits_used,
+        'Last Service Date': amc.last_service_date,
+        'Next Service Due': amc.next_service_due,
         'Assigned Engineer': amc.assigned_engineer || '',
+        'Remarks': amc.remarks,
+        // New fields
+        'AMC Amount (₹)': amc.amc_amount || 0,
+        'Amount Paid (₹)': amc.amount_paid || 0,
+        'Pending Amount (₹)': amc.pending_amount || 0,
+        'Payment Mode': amc.payment_mode || '',
+        'Payment Status': amc.payment_status || '',
+        'Port Number': amc.port_number || '',
+        'Employee Limit': amc.employee_limit || '',
+        'Device Limit': amc.device_limit || '',
         'Deleted At': amc.deleted_at || '',
         'Last Updated': amc.last_updated || ''
       }));
@@ -334,7 +361,7 @@ export default function AMCPage() {
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, showTrash ? 'Trashed AMC Records' : 'AMC Records');
-      worksheet['!cols'] = Array(15).fill({ wch: 15 });
+      worksheet['!cols'] = Array(25).fill({ wch: 15 });
       XLSX.writeFile(workbook, `${showTrash ? 'Trashed_' : ''}AMC_Records_${new Date().toISOString().split('T')[0]}.xlsx`);
       showToast(`Exported ${dataToExport.length} AMC records`, 'success');
     } catch (error) {
@@ -348,10 +375,21 @@ export default function AMCPage() {
         'S.No': index + 1,
         'Customer': amc.customer_name,
         'Phone': amc.phone,
+        'Location': amc.location,
         'Type': amc.amc_type,
         'Category': amc.amc_category,
         'Invoice': amc.invoice_number,
+        'Start Date': amc.start_date,
+        'End Date': amc.end_date,
         'Status': amc.amc_status,
+        'AMC Amount': amc.amc_amount || 0,
+        'Paid': amc.amount_paid || 0,
+        'Pending': amc.pending_amount || 0,
+        'Payment Mode': amc.payment_mode || '',
+        'Payment Status': amc.payment_status || '',
+        'Port Number': amc.port_number || '',
+        'Employee Limit': amc.employee_limit || '',
+        'Device Limit': amc.device_limit || '',
         'Deleted At': amc.deleted_at || ''
       }));
 
@@ -369,9 +407,54 @@ export default function AMCPage() {
   };
 
   // ============================================
-  // IMPORT FUNCTIONS
+  // HELPER: Robust date parsing for import
   // ============================================
+  const parseExcelDate = (value: any): string | null => {
+    if (!value && value !== 0) return null; // treat empty as null
 
+    // If it's a number (Excel serial date)
+    if (typeof value === 'number') {
+      // Excel serial date: days since 1900-01-01 (1 = 1900-01-01)
+      const excelEpoch = new Date(1899, 11, 31); // Dec 31, 1899 (Excel's 0 is 1900-01-00, but 1 is 1900-01-01)
+      const jsDate = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
+      if (!isNaN(jsDate.getTime())) {
+        return jsDate.toISOString().split('T')[0];
+      }
+      return null;
+    }
+
+    // If it's a string
+    if (typeof value === 'string') {
+      // Try standard JS date parsing (works for YYYY-MM-DD and many formats)
+      const jsDate = new Date(value);
+      if (!isNaN(jsDate.getTime())) {
+        return jsDate.toISOString().split('T')[0];
+      }
+
+      // Try to parse common formats like DD/MM/YYYY or DD-MM-YYYY
+      const parts = value.split(/[\/\-]/);
+      if (parts.length === 3) {
+        // Assume DD/MM/YYYY if first part > 12, else assume MM/DD/YYYY? Risky.
+        // We'll attempt both orders and take the one that produces a valid date.
+        const candidates = [
+          new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])), // DD/MM/YYYY
+          new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]))  // MM/DD/YYYY
+        ];
+        for (const candidate of candidates) {
+          if (!isNaN(candidate.getTime())) {
+            return candidate.toISOString().split('T')[0];
+          }
+        }
+      }
+      return null; // failed to parse
+    }
+
+    return null;
+  };
+
+  // ============================================
+  // IMPORT FUNCTIONS (fixed date handling)
+  // ============================================
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -398,52 +481,108 @@ export default function AMCPage() {
             return;
           }
 
-          const amcsToImport = data.map((row: any) => {
-            const normalized: any = {};
-            Object.keys(row).forEach(key => {
-              normalized[key.toLowerCase().trim().replace(/\s+/g, '_')] = row[key];
-            });
+          // Helper: clean header to match expected keys (keep only alphanumeric and underscore)
+          const cleanHeader = (header: string): string => {
+            return header
+              .toLowerCase()
+              .replace(/[^\w\s]/g, '')
+              .replace(/\s+/g, '_')
+              .replace(/^_+|_+$/g, ''); // ← add this line
+          };
 
-            const startDate = normalized['start_date'] || new Date().toISOString().split('T')[0];
-            const duration = parseInt(normalized['duration']) || 12;
-            const endDate = calculateEndDate(startDate, duration);
+          // Helper: parse dates
+          const parseDate = (val: any): string | null => {
+            if (!val && val !== 0) return null;
+            if (typeof val === 'number') {
+              const excelEpoch = new Date(1899, 11, 31);
+              const jsDate = new Date(excelEpoch.getTime() + val * 24 * 60 * 60 * 1000);
+              return isNaN(jsDate.getTime()) ? null : jsDate.toISOString().split('T')[0];
+            }
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+          };
 
-            return {
-              user_id: user.id,
-              customer_name: normalized['customer_name'] || normalized['customer'] || '',
-              phone: String(normalized['phone'] || ''),
-              location: normalized['location'] || '',
-              amc_type: ['CCTV', 'Biometric', 'Access Control', 'Automation','Software'].includes(normalized['amc_type'])
-                ? normalized['amc_type']
-                : 'CCTV',
-              amc_category: ['Comprehensive', 'Non-comprehensive','Cloud'].includes(normalized['amc_category'])
-                ? normalized['amc_category']
-                : 'Comprehensive',
-              invoice_number: normalized['invoice_number'] || normalized['invoice'] || '',
-              scope_of_work: normalized['scope_of_work'] || 'Maintenance',
-              start_date: startDate,
-              end_date: endDate,
-              duration: duration,
-              amc_status: calculateAMCStatus(startDate, endDate),
-              covered_devices: normalized['covered_devices'] || '',
-              serial_numbers: normalized['serial_numbers'] || '',
-              total_visits_allowed: parseInt(normalized['total_visits']) || 4,
-              visits_used: parseInt(normalized['visits_used']) || 0,
-              last_service_date: normalized['last_service_date'] || '',
-              next_service_due: normalized['next_service_due'] || '',
-              assigned_engineer: normalized['assigned_engineer'] || '',
-              remarks: normalized['remarks'] || '',
-              last_updated: new Date().toISOString().split('T')[0],
-              deleted: false,
-              deleted_at: null
-            };
-          }).filter(amc => amc.customer_name && amc.phone);
+          // Helper: parse numbers (handles commas, currency symbols)
+          const parseNumber = (val: any): number => {
+            if (val === undefined || val === null) return 0;
+            if (typeof val === 'number') return val;
+            const cleaned = String(val).replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+          };
+
+          const amcsToImport = data
+            .map((row: any, index: number) => {
+              const normalized: any = {};
+              Object.keys(row).forEach(key => {
+                const cleanKey = cleanHeader(key);
+                normalized[cleanKey] = row[key];
+              });
+
+              // Log the first row's normalized data for debugging
+              if (index === 0) {
+                console.log('Normalized first row:', normalized);
+              }
+
+              // Skip rows without essential data
+              if (!normalized['customer_name'] && !normalized['customer'] && !normalized['phone']) return null;
+
+              const startDate = parseDate(normalized['start_date']) || new Date().toISOString().split('T')[0];
+              const duration = parseNumber(normalized['duration']) || 12;
+              const endDate = calculateEndDate(startDate, duration);
+
+              const amcAmount = parseNumber(normalized['amc_amount']);
+              const amountPaid = parseNumber(normalized['amount_paid']);
+              const pendingAmount = amcAmount - amountPaid;
+
+              return {
+                user_id: user.id,
+                customer_name: normalized['customer_name'] || normalized['customer'] || '',
+                phone: String(normalized['phone'] || ''),
+                location: normalized['location'] || '',
+                amc_type: ['CCTV', 'Biometric', 'Access Control', 'Automation', 'Software'].includes(normalized['amc_type'])
+                  ? normalized['amc_type']
+                  : 'CCTV',
+                amc_category: ['Comprehensive', 'Non-comprehensive', 'Cloud'].includes(normalized['amc_category'])
+                  ? normalized['amc_category']
+                  : 'Comprehensive',
+                invoice_number: normalized['invoice_number'] || normalized['invoice'] || '',
+                scope_of_work: normalized['scope_of_work'] || 'Maintenance',
+                start_date: startDate,
+                end_date: endDate,
+                duration: duration,
+                amc_status: calculateAMCStatus(startDate, endDate),
+                covered_devices: normalized['covered_devices'] || '',
+                serial_numbers: normalized['serial_numbers'] || '',
+                total_visits_allowed: parseNumber(normalized['total_visits']) || 4,
+                visits_used: parseNumber(normalized['visits_used']) || 0,
+                last_service_date: parseDate(normalized['last_service_date']),
+                next_service_due: parseDate(normalized['next_service_due']),
+                assigned_engineer: normalized['assigned_engineer'] || '',
+                remarks: normalized['remarks'] || '',
+                amc_amount: amcAmount,
+                amount_paid: amountPaid,
+                pending_amount: pendingAmount,
+                payment_mode: normalized['payment_mode'] || 'Cash',
+                payment_status: normalized['payment_status'] || 'Pending',
+                port_number: normalized['port_number'] || null,
+                employee_limit: parseNumber(normalized['employee_limit']) || null,
+                device_limit: parseNumber(normalized['device_limit']) || null,
+                last_updated: new Date().toISOString().split('T')[0],
+                deleted: false,
+                deleted_at: null
+              };
+            })
+            .filter(amc => amc !== null && amc.customer_name && amc.phone);
 
           if (amcsToImport.length === 0) {
             showToast('No valid records found', 'warning');
             e.target.value = '';
             return;
           }
+
+          // Log first record to verify amounts
+          console.log('First record to insert:', amcsToImport[0]);
 
           const { data: insertedData, error } = await supabase
             .from('amc')
@@ -507,6 +646,7 @@ export default function AMCPage() {
         return;
       }
 
+      // Keep validation to ensure critical fields are present (since DB requires them)
       if (!formData.customer_name || !formData.phone || !formData.location || !formData.invoice_number) {
         showToast('Please fill all required fields', 'error');
         return;
@@ -520,6 +660,10 @@ export default function AMCPage() {
       const duration = parseInt(formData.duration) || 12;
       const endDate = calculateEndDate(formData.start_date, duration);
       const amcStatus = calculateAMCStatus(formData.start_date, endDate);
+
+      const amcAmount = parseFloat(formData.amc_amount) || 0;
+      const amountPaid = parseFloat(formData.amount_paid) || 0;
+      const pendingAmount = amcAmount - amountPaid;
 
       const amcData = {
         user_id: user.id,
@@ -537,6 +681,15 @@ export default function AMCPage() {
         covered_devices: formData.covered_devices.trim(),
         serial_numbers: formData.serial_numbers?.trim() || '',
         remarks: formData.remarks?.trim() || '',
+        // New fields
+        amc_amount: amcAmount,
+        amount_paid: amountPaid,
+        pending_amount: pendingAmount,
+        payment_mode: formData.payment_mode || null,
+        payment_status: formData.payment_status || null,
+        port_number: formData.port_number?.trim() || null,
+        employee_limit: formData.employee_limit ? parseInt(formData.employee_limit) : null,
+        device_limit: formData.device_limit ? parseInt(formData.device_limit) : null,
         last_updated: new Date().toISOString().split('T')[0],
         deleted: false,
         deleted_at: null
@@ -558,7 +711,9 @@ export default function AMCPage() {
       setFormData({
         customer_name: '', phone: '', location: '', amc_type: 'CCTV', amc_category: 'Comprehensive',
         invoice_number: '', scope_of_work: '', start_date: '', duration: '12', covered_devices: '',
-        serial_numbers: '', remarks: ''
+        serial_numbers: '', remarks: '',
+        amc_amount: '', amount_paid: '', payment_mode: '', payment_status: '',
+        port_number: '', employee_limit: '', device_limit: ''
       });
     } catch (error: any) {
       showToast(`Save failed: ${error?.message || 'Unknown error'}`, 'error');
@@ -579,12 +734,19 @@ export default function AMCPage() {
       duration: amc.duration.toString(),
       covered_devices: amc.covered_devices,
       serial_numbers: amc.serial_numbers || '',
-      remarks: amc.remarks || ''
+      remarks: amc.remarks || '',
+      amc_amount: amc.amc_amount?.toString() || '',
+      amount_paid: amc.amount_paid?.toString() || '',
+      payment_mode: (amc.payment_mode as any) || '',
+      payment_status: (amc.payment_status as any) || '',
+      port_number: amc.port_number || '',
+      employee_limit: amc.employee_limit?.toString() || '',
+      device_limit: amc.device_limit?.toString() || ''
     });
     setShowModal(true);
   };
 
-  // SOFT DELETE - Mark as deleted for 7 days before auto-deletion
+  // SOFT DELETE
   const handleDelete = async (id: number) => {
     showConfirm('Delete this AMC? (Will be permanently removed in 7 days)', async () => {
       try {
@@ -592,7 +754,6 @@ export default function AMCPage() {
           .from('amc')
           .update({ deleted: true, deleted_at: new Date().toISOString() })
           .eq('id', id);
-
         if (error) throw error;
         await fetchAMCs();
         showToast('Deleted (will be removed in 7 days)', 'success');
@@ -602,7 +763,7 @@ export default function AMCPage() {
     });
   };
 
-  // RESTORE FROM TRASH
+  // RESTORE
   const handleRestore = async (id: number) => {
     showConfirm('Restore this AMC from trash?', async () => {
       try {
@@ -614,7 +775,6 @@ export default function AMCPage() {
             last_updated: new Date().toISOString().split('T')[0]
           })
           .eq('id', id);
-
         if (error) throw error;
         await fetchAMCs();
         showToast('AMC restored successfully!', 'success');
@@ -624,23 +784,18 @@ export default function AMCPage() {
     });
   };
 
-  // ============================================
   // BULK OPERATIONS
-  // ============================================
-
   const handleBulkDelete = async () => {
     if (selectedAMCs.length === 0) {
       showToast('No records selected', 'warning');
       return;
     }
-
     showConfirm(`Delete ${selectedAMCs.length} records? (Will be permanently removed in 7 days)`, async () => {
       try {
         const { error } = await supabase
           .from('amc')
           .update({ deleted: true, deleted_at: new Date().toISOString() })
           .in('id', selectedAMCs);
-
         if (error) throw error;
         await fetchAMCs();
         setSelectedAMCs([]);
@@ -656,7 +811,6 @@ export default function AMCPage() {
       showToast('No records selected', 'warning');
       return;
     }
-
     showConfirm(`Restore ${selectedAMCs.length} records from trash?`, async () => {
       try {
         const { error } = await supabase
@@ -667,7 +821,6 @@ export default function AMCPage() {
             last_updated: new Date().toISOString().split('T')[0]
           })
           .in('id', selectedAMCs);
-
         if (error) throw error;
         await fetchAMCs();
         setSelectedAMCs([]);
@@ -679,10 +832,8 @@ export default function AMCPage() {
   };
 
   const handleSelectAll = () => {
-    const currentDataSource = showTrash ? trashedAMCs : amcs;
     const currentFiltered = showTrash ? filteredTrashAMCs : filteredAMCs;
     const currentPageItems = currentFiltered.slice(indexOfFirstItem, indexOfLastItem);
-
     if (selectedAMCs.length === currentPageItems.length) {
       setSelectedAMCs([]);
     } else {
@@ -741,7 +892,6 @@ export default function AMCPage() {
   // FILTERING AND CALCULATIONS
   // ============================================
 
-  // Filter active AMCs
   const filteredAMCs = amcs.filter(amc => {
     const matchesSearch = amc.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       amc.phone.includes(searchTerm) || amc.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -759,7 +909,6 @@ export default function AMCPage() {
     return true;
   });
 
-  // Filter trashed AMCs
   const filteredTrashAMCs = trashedAMCs.filter(amc => {
     const matchesSearch = amc.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       amc.phone.includes(searchTerm) || amc.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -824,16 +973,13 @@ export default function AMCPage() {
           >
             First
           </button>
-
           <button
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
             className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
           >
-            <ChevronLeft size={14} />
-            Prev
+            <ChevronLeft size={14} /> Prev
           </button>
-
           {startPage > 1 && (
             <>
               <button
@@ -845,20 +991,18 @@ export default function AMCPage() {
               {startPage > 2 && <span className="px-2 text-gray-500">...</span>}
             </>
           )}
-
           {pageNumbers.map(number => (
             <button
               key={number}
               onClick={() => setCurrentPage(number)}
               className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${currentPage === number
-                ? 'bg-orange-600 text-white border-orange-600'
-                : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                  ? 'bg-orange-600 text-white border-orange-600'
+                  : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
                 }`}
             >
               {number}
             </button>
           ))}
-
           {endPage < totalPages && (
             <>
               {endPage < totalPages - 1 && <span className="px-2 text-gray-500">...</span>}
@@ -870,16 +1014,13 @@ export default function AMCPage() {
               </button>
             </>
           )}
-
           <button
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
             className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
           >
-            Next
-            <ChevronRight size={14} />
+            Next <ChevronRight size={14} />
           </button>
-
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage === totalPages}
@@ -897,10 +1038,7 @@ export default function AMCPage() {
   const comprehensiveCount = amcs.filter(a => a.amc_category === 'Comprehensive').length;
   const totalContracts = amcs.length;
 
-  if (!mounted) {
-    return null;
-  }
-
+  if (!mounted) return null;
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -914,15 +1052,14 @@ export default function AMCPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-
       {/* Toast Notifications */}
       <div className="fixed top-4 right-4 z-[100] space-y-2">
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] ${toast.type === 'success' ? 'bg-green-500 text-white' :
-              toast.type === 'error' ? 'bg-red-500 text-white' :
-                toast.type === 'warning' ? 'bg-yellow-500 text-white' : 'bg-blue-500 text-white'
+                toast.type === 'error' ? 'bg-red-500 text-white' :
+                  toast.type === 'warning' ? 'bg-yellow-500 text-white' : 'bg-blue-500 text-white'
               }`}
           >
             {toast.type === 'success' && <CheckCircle size={20} />}
@@ -930,10 +1067,7 @@ export default function AMCPage() {
             {toast.type === 'warning' && <AlertCircle size={20} />}
             {toast.type === 'info' && <Info size={20} />}
             <p className="flex-1 text-sm font-medium">{toast.message}</p>
-            <button
-              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="text-white hover:text-gray-200 transition-colors"
-            >
+            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-white hover:text-gray-200">
               <X size={16} />
             </button>
           </div>
@@ -955,16 +1089,10 @@ export default function AMCPage() {
                 </div>
                 <p className="text-gray-600 mb-6">{confirmAction?.message}</p>
                 <div className="flex gap-3">
-                  <button
-                    onClick={handleConfirm}
-                    className="flex-1 bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-700 hover:to-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
-                  >
+                  <button onClick={handleConfirm} className="flex-1 bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-700 hover:to-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-all">
                     Confirm
                   </button>
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium transition-all"
-                  >
+                  <button onClick={() => setShowConfirmModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium transition-all">
                     Cancel
                   </button>
                 </div>
@@ -1008,6 +1136,7 @@ export default function AMCPage() {
               </div>
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Existing fields (all required removed) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name *</label>
                     <input
@@ -1017,7 +1146,6 @@ export default function AMCPage() {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter customer name"
-                      required
                     />
                   </div>
                   <div>
@@ -1029,7 +1157,6 @@ export default function AMCPage() {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter phone number"
-                      required
                     />
                   </div>
                   <div>
@@ -1041,7 +1168,6 @@ export default function AMCPage() {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter location/address"
-                      required
                     />
                   </div>
                   <div>
@@ -1051,13 +1177,12 @@ export default function AMCPage() {
                       name="invoice_number"
                       value={formData.invoice_number}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900 "
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Enter invoice number"
-                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">AMC Type *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">AMC Type</label>
                     <select
                       name="amc_type"
                       value={formData.amc_type}
@@ -1072,7 +1197,7 @@ export default function AMCPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">AMC Category *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">AMC Category</label>
                     <select
                       name="amc_category"
                       value={formData.amc_category}
@@ -1085,18 +1210,17 @@ export default function AMCPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                     <input
                       type="date"
                       name="start_date"
                       value={formData.start_date}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700 "
-                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (months) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (months)</label>
                     <input
                       type="number"
                       name="duration"
@@ -1104,16 +1228,12 @@ export default function AMCPage() {
                       onChange={handleInputChange}
                       min="1"
                       max="60"
-                      className="w-full px-3 py-2 border border-gray-300 rounded
-           text-gray-900 bg-white
-           placeholder-gray-400
-           focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 bg-white placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                       placeholder="Select Months"
-                      required
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Scope of Work *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Scope of Work</label>
                     <textarea
                       name="scope_of_work"
                       value={formData.scope_of_work}
@@ -1121,11 +1241,10 @@ export default function AMCPage() {
                       rows={2}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="Describe the scope of work/maintenance"
-                      required
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Covered Devices *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Covered Devices</label>
                     <textarea
                       name="covered_devices"
                       value={formData.covered_devices}
@@ -1133,7 +1252,6 @@ export default function AMCPage() {
                       rows={2}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder-gray-500 text-gray-900"
                       placeholder="List the devices covered under AMC"
-                      required
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1158,19 +1276,120 @@ export default function AMCPage() {
                       placeholder="Additional notes or comments"
                     />
                   </div>
+
+                  {/* Payment Information */}
+                  <div className="md:col-span-2">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Payment Details</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label>
+                        <input
+                          type="number"
+                          name="amc_amount"
+                          value={formData.amc_amount}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (₹)</label>
+                        <input
+                          type="number"
+                          name="amount_paid"
+                          value={formData.amount_paid}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+                        <select
+                          name="payment_mode"
+                          value={formData.payment_mode}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700"
+                        >
+                          <option value="">Select Mode</option>
+                          <option value="Cash">Cash</option>
+                          <option value="UPI">UPI</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="Card">Card</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                        <select
+                          name="payment_status"
+                          value={formData.payment_status}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-700"
+                        >
+                          <option value="">Select Status</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Received">Received</option>
+                          <option value="Failed">Failed</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Software-specific fields – shown only when AMC Type is Software */}
+                  {formData.amc_type === 'Software' && (
+                    <div className="md:col-span-2">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Software Details</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Port Number</label>
+                          <input
+                            type="text"
+                            name="port_number"
+                            value={formData.port_number}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                            placeholder="e.g., 8080"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Employee Limit</label>
+                          <input
+                            type="number"
+                            name="employee_limit"
+                            value={formData.employee_limit}
+                            onChange={handleInputChange}
+                            min="1"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                            placeholder="e.g., 50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Device Limit</label>
+                          <input
+                            type="number"
+                            name="device_limit"
+                            value={formData.device_limit}
+                            onChange={handleInputChange}
+                            min="1"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                            placeholder="e.g., 100"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex justify-end gap-3 pt-4 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-all"
-                  >
+                  <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-all">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-700 hover:to-orange-700 text-white rounded-lg font-medium transition-all"
-                  >
+                  <button type="submit" className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-700 hover:to-orange-700 text-white rounded-lg font-medium transition-all">
                     {editingAMC ? 'Update AMC' : 'Add AMC'}
                   </button>
                 </div>
@@ -1182,8 +1401,6 @@ export default function AMCPage() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Header */}
         <header className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <h2 className="text-base lg:text-xl font-bold text-gray-800 truncate">
@@ -1195,7 +1412,6 @@ export default function AMCPage() {
               </span>
             )}
           </div>
-
           <div className="flex items-center gap-2 flex-shrink-0">
             {!showTrash && (
               <button
@@ -1205,7 +1421,9 @@ export default function AMCPage() {
                   setFormData({
                     customer_name: '', phone: '', location: '', amc_type: 'CCTV', amc_category: 'Comprehensive',
                     invoice_number: '', scope_of_work: '', start_date: '', duration: '12', covered_devices: '',
-                    serial_numbers: '', remarks: ''
+                    serial_numbers: '', remarks: '',
+                    amc_amount: '', amount_paid: '', payment_mode: '', payment_status: '',
+                    port_number: '', employee_limit: '', device_limit: ''
                   });
                 }}
                 className="bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-700 hover:to-orange-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-1.5 text-sm"
@@ -1217,10 +1435,8 @@ export default function AMCPage() {
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-auto p-3 lg:p-4">
-
-          {/* Stats Cards (Only show when not in trash) */}
+          {/* Stats Cards */}
           {!showTrash && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
               <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-3 shadow-md text-white">
@@ -1249,136 +1465,66 @@ export default function AMCPage() {
           {/* Action Bar */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 mb-4">
             <div className="flex flex-col lg:flex-row gap-2">
-
-              {/* Search */}
               <div className="w-full lg:w-64 flex-shrink-0">
                 <div className="relative">
-                  <Search
-                    className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    size={16}
-                  />
+                  <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                   <input
                     type="text"
                     placeholder={`Search ${showTrash ? 'trash' : 'AMCs'}...`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm
-               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-800"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-800"
                   />
                 </div>
               </div>
-
-              {/* Buttons */}
               <div className="flex gap-2 flex-wrap flex-1">
-
                 {!showTrash ? (
                   <>
-                    <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700
-               rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Filter size={18} />
-                      <span>Filter</span>
+                    <button onClick={() => setShowFilters(!showFilters)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Filter size={18} /> <span>Filter</span>
                     </button>
-
-                    <button
-                      onClick={handleExportExcel}
-                      className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700
-               rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Download size={18} />
-                      <span>Excel</span>
+                    <button onClick={handleExportExcel} className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Download size={18} /> <span>Excel</span>
                     </button>
-
-                    <button
-                      onClick={handleExportCSV}
-                      className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700
-               rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Download size={18} />
-                      <span>CSV</span>
+                    <button onClick={handleExportCSV} className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Download size={18} /> <span>CSV</span>
                     </button>
-
-                    <label className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700
-                        rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer">
-                      <Upload size={18} />
-                      <span>Import</span>
-                      <input
-                        type="file"
-                        accept=".xlsx,.xls,.csv"
-                        onChange={handleImport}
-                        className="hidden"
-                      />
+                    <label className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer">
+                      <Upload size={18} /> <span>Import</span>
+                      <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
                     </label>
-
                     {lastImportedIds.length > 0 && (
-                      <button
-                        onClick={handleUndoImport}
-                        className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700
-                 rounded-lg text-sm font-medium flex items-center gap-2"
-                      >
-                        <RotateCcw size={18} />
-                        <span>Undo</span>
+                      <button onClick={handleUndoImport} className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <RotateCcw size={18} /> <span>Undo</span>
                       </button>
                     )}
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={handleExportExcel}
-                      className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700
-               rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Download size={18} />
-                      <span>Export Excel</span>
+                    <button onClick={handleExportExcel} className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Download size={18} /> <span>Export Excel</span>
                     </button>
-
-                    <button
-                      onClick={handleExportCSV}
-                      className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700
-               rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Download size={18} />
-                      <span>Export CSV</span>
+                    <button onClick={handleExportCSV} className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Download size={18} /> <span>Export CSV</span>
                     </button>
                   </>
                 )}
-
-                {/* Trash Toggle Button (Always Visible) */}
-                <button
-                  onClick={() => setShowTrash(!showTrash)}
-                  className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700
-           rounded-lg text-sm font-medium flex items-center gap-2 ml-auto"
-                >
-                  {showTrash ? (
-                    <>
-                      <Undo2 size={18} />
-                      <span>Back to AMCs</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={18} />
-                      <span>Trash ({trashedAMCs.length})</span>
-                    </>
-                  )}
+                <button onClick={() => setShowTrash(!showTrash)} className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium flex items-center gap-2 ml-auto">
+                  {showTrash ? <><Undo2 size={18} /> <span>Back to AMCs</span></> : <><Trash2 size={18} /> <span>Trash ({trashedAMCs.length})</span></>}
                 </button>
-
               </div>
             </div>
           </div>
 
-          {/* ===== AESTHETIC FILTER SECTION – FULLY CUSTOM DROPDOWNS ===== */}
+          {/* Aesthetic Filter Section */}
           {showFilters && !showTrash && (
             <div className="mt-4 pt-4 border-t border-gray-200" ref={dropdownRef}>
               <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 shadow-sm border border-orange-100">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                  <Filter size={16} className="text-orange-500" />
-                  Filter AMCs
+                  <Filter size={16} className="text-orange-500" /> Filter AMCs
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-
-                  {/* STATUS CUSTOM DROPDOWN */}
+                  {/* Status dropdown */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
                       <AlertCircle size={14} />
@@ -1388,12 +1534,9 @@ export default function AMCPage() {
                       onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
                       className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
                     >
-                      <span className="truncate">
-                        {filters.amc_status ? filters.amc_status : 'All Status'}
-                      </span>
+                      <span className="truncate">{filters.amc_status ? filters.amc_status : 'All Status'}</span>
                       <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'status' ? 'rotate-180' : ''}`} />
                     </button>
-
                     {openDropdown === 'status' && (
                       <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
                         {['', 'Active', 'Expired', 'Upcoming'].map((value) => (
@@ -1403,11 +1546,7 @@ export default function AMCPage() {
                               handleFilterChange({ target: { name: 'amc_status', value } } as any);
                               setOpenDropdown(null);
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
-                              filters.amc_status === value
-                                ? 'bg-orange-100 text-orange-700 font-medium'
-                                : 'text-gray-700'
-                            }`}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${filters.amc_status === value ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-700'}`}
                           >
                             {value === '' ? 'All Status' : value}
                           </button>
@@ -1415,8 +1554,7 @@ export default function AMCPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* CUSTOMER NAME INPUT */}
+                  {/* Customer name input */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
                       <User size={14} />
@@ -1430,8 +1568,7 @@ export default function AMCPage() {
                       className="w-full pl-8 pr-3 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
                     />
                   </div>
-
-                  {/* AMC TYPE CUSTOM DROPDOWN */}
+                  {/* AMC Type dropdown */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
                       <Package size={14} />
@@ -1441,12 +1578,9 @@ export default function AMCPage() {
                       onClick={() => setOpenDropdown(openDropdown === 'type' ? null : 'type')}
                       className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
                     >
-                      <span className="truncate">
-                        {filters.amc_type ? filters.amc_type : 'All Types'}
-                      </span>
+                      <span className="truncate">{filters.amc_type ? filters.amc_type : 'All Types'}</span>
                       <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'type' ? 'rotate-180' : ''}`} />
                     </button>
-
                     {openDropdown === 'type' && (
                       <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
                         {['', 'CCTV', 'Biometric', 'Access Control', 'Automation', 'Software'].map((value) => (
@@ -1456,11 +1590,7 @@ export default function AMCPage() {
                               handleFilterChange({ target: { name: 'amc_type', value } } as any);
                               setOpenDropdown(null);
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
-                              filters.amc_type === value
-                                ? 'bg-orange-100 text-orange-700 font-medium'
-                                : 'text-gray-700'
-                            }`}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${filters.amc_type === value ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-700'}`}
                           >
                             {value === '' ? 'All Types' : value}
                           </button>
@@ -1468,8 +1598,7 @@ export default function AMCPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* AMC CATEGORY CUSTOM DROPDOWN */}
+                  {/* AMC Category dropdown */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10">
                       <Tag size={14} />
@@ -1479,12 +1608,9 @@ export default function AMCPage() {
                       onClick={() => setOpenDropdown(openDropdown === 'category' ? null : 'category')}
                       className="w-full pl-8 pr-8 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-left text-gray-700 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
                     >
-                      <span className="truncate">
-                        {filters.amc_category ? filters.amc_category : 'All Categories'}
-                      </span>
+                      <span className="truncate">{filters.amc_category ? filters.amc_category : 'All Categories'}</span>
                       <ChevronDown size={14} className={`text-orange-400 transition-transform ${openDropdown === 'category' ? 'rotate-180' : ''}`} />
                     </button>
-
                     {openDropdown === 'category' && (
                       <div className="absolute top-full left-0 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg z-50 py-1 animate-fadeIn">
                         {['', 'Comprehensive', 'Non-comprehensive', 'Cloud'].map((value) => (
@@ -1494,11 +1620,7 @@ export default function AMCPage() {
                               handleFilterChange({ target: { name: 'amc_category', value } } as any);
                               setOpenDropdown(null);
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
-                              filters.amc_category === value
-                                ? 'bg-orange-100 text-orange-700 font-medium'
-                                : 'text-gray-700'
-                            }`}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${filters.amc_category === value ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-700'}`}
                           >
                             {value === '' ? 'All Categories' : value}
                           </button>
@@ -1506,8 +1628,7 @@ export default function AMCPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* DATE FROM */}
+                  {/* Date From */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
                       <Calendar size={14} />
@@ -1520,8 +1641,7 @@ export default function AMCPage() {
                       className="w-full pl-8 pr-3 py-2.5 bg-white border border-orange-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
                     />
                   </div>
-
-                  {/* DATE TO */}
+                  {/* Date To */}
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400">
                       <Calendar size={14} />
@@ -1535,15 +1655,10 @@ export default function AMCPage() {
                     />
                   </div>
                 </div>
-
-                {/* Clear Filters Button */}
+                {/* Clear Filters */}
                 <div className="flex justify-end mt-3">
-                  <button
-                    onClick={clearFilters}
-                    className="px-4 py-2 bg-white border border-orange-200 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 hover:border-orange-300 transition-all flex items-center gap-1.5 shadow-sm"
-                  >
-                    <X size={14} />
-                    Clear all filters
+                  <button onClick={clearFilters} className="px-4 py-2 bg-white border border-orange-200 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 hover:border-orange-300 transition-all flex items-center gap-1.5 shadow-sm">
+                    <X size={14} /> Clear all filters
                   </button>
                 </div>
               </div>
@@ -1556,22 +1671,12 @@ export default function AMCPage() {
               <p className="text-xs text-gray-600 font-medium">{selectedAMCs.length} selected</p>
               <div className="flex gap-2">
                 {showTrash ? (
-                  <>
-                    <button
-                      onClick={handleBulkRestore}
-                      className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium flex items-center gap-1"
-                    >
-                      <Undo2 size={14} />
-                      Restore Selected
-                    </button>
-                  </>
+                  <button onClick={handleBulkRestore} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium flex items-center gap-1">
+                    <Undo2 size={14} /> Restore Selected
+                  </button>
                 ) : (
-                  <button
-                    onClick={handleBulkDelete}
-                    className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1"
-                  >
-                    <Trash2 size={14} />
-                    Delete
+                  <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1">
+                    <Trash2 size={14} /> Delete
                   </button>
                 )}
               </div>
@@ -1599,19 +1704,24 @@ export default function AMCPage() {
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Category</th>
                     {showTrash && <th className="p-2 text-left font-semibold whitespace-nowrap">Deleted On</th>}
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Contract Period</th>
-                    {!showTrash && <th className="p-2 text-left font-semibold whitespace-nowrap">Status</th>}
+                    {!showTrash && (
+                      <>
+                        <th className="p-2 text-left font-semibold whitespace-nowrap">Amount (₹)</th>
+                        <th className="p-2 text-left font-semibold whitespace-nowrap">Paid (₹)</th>
+                        <th className="p-2 text-left font-semibold whitespace-nowrap">Pending (₹)</th>
+                        <th className="p-2 text-left font-semibold whitespace-nowrap">Status</th>
+                      </>
+                    )}
                     <th className="p-2 text-center font-semibold whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={showTrash ? 10 : 9} className="p-8 text-center text-gray-500">
+                      <td colSpan={showTrash ? 10 : 12} className="p-8 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <AlertCircle size={32} className="text-gray-400" />
-                          <p className="text-sm">
-                            {showTrash ? 'No trashed AMC records found' : 'No AMC records found'}
-                          </p>
+                          <p className="text-sm">{showTrash ? 'No trashed AMC records found' : 'No AMC records found'}</p>
                           {showTrash && trashedAMCs.length === 0 && (
                             <p className="text-xs text-gray-400">Trash is empty. Items are automatically deleted after 7 days</p>
                           )}
@@ -1652,9 +1762,7 @@ export default function AMCPage() {
                         </td>
                         {showTrash && (
                           <td className="p-2 whitespace-nowrap">
-                            <div className="text-xs text-gray-500">
-                              {formatDateTime(amc.deleted_at)}
-                            </div>
+                            <div className="text-xs text-gray-500">{formatDateTime(amc.deleted_at)}</div>
                           </td>
                         )}
                         <td className="p-2 whitespace-nowrap">
@@ -1665,38 +1773,35 @@ export default function AMCPage() {
                           </div>
                         </td>
                         {!showTrash && (
-                          <td className="p-2 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(amc.amc_status)}`}>
-                              {amc.amc_status}
-                            </span>
-                          </td>
+                          <>
+                            <td className="p-2 whitespace-nowrap text-gray-900">
+                              ₹{amc.amc_amount?.toFixed(2) ?? '0.00'}
+                            </td>
+                            <td className="p-2 whitespace-nowrap text-green-600">
+                              ₹{amc.amount_paid?.toFixed(2) ?? '0.00'}
+                            </td>
+                            <td className="p-2 whitespace-nowrap text-orange-600">
+                              ₹{amc.pending_amount?.toFixed(2) ?? '0.00'}
+                            </td>
+                            <td className="p-2 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(amc.amc_status)}`}>
+                                {amc.amc_status}
+                              </span>
+                            </td>
+                          </>
                         )}
                         <td className="p-2 whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">
                             {showTrash ? (
-                              <>
-                                <button
-                                  onClick={() => handleRestore(amc.id)}
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                  title="Restore"
-                                >
-                                  <Undo2 size={14} />
-                                </button>
-                              </>
+                              <button onClick={() => handleRestore(amc.id)} className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors" title="Restore">
+                                <Undo2 size={14} />
+                              </button>
                             ) : (
                               <>
-                                <button
-                                  onClick={() => handleEdit(amc)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  title="Edit"
-                                >
+                                <button onClick={() => handleEdit(amc)} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
                                   <Edit2 size={14} />
                                 </button>
-                                <button
-                                  onClick={() => handleDelete(amc.id)}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Delete"
-                                >
+                                <button onClick={() => handleDelete(amc.id)} className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
                                   <Trash2 size={14} />
                                 </button>
                               </>
@@ -1709,11 +1814,9 @@ export default function AMCPage() {
                 </tbody>
               </table>
             </div>
-
             {renderPagination()}
           </div>
         </main>
-
       </div>
     </div>
   );
