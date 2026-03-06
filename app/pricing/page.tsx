@@ -49,6 +49,7 @@ interface FormData {
   brand: string;
   customBrand: string;
   category: string;
+  customCategory: string;
   subcategory: string;
   product_name: string;
   model_number: string;
@@ -88,6 +89,9 @@ export default function PricingPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
+  const [minPrice, setMinPrice] = useState<number | ''>('');
+  const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('All');
   const [showTrash, setShowTrash] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -112,6 +116,7 @@ export default function PricingPage() {
     brand: 'ESSL',
     customBrand: '',
     category: '',
+    customCategory: '',
     subcategory: '',
     product_name: '',
     model_number: '',
@@ -138,6 +143,11 @@ export default function PricingPage() {
         color: 'from-gray-500 to-gray-600'
       }));
     return [...defaultBrands, ...customBrands];
+  }, [products]);
+
+  // Get all unique categories from products (for dropdown)
+  const allCategories = React.useMemo(() => {
+    return [...new Set(products.map(p => p.category).filter(Boolean))];
   }, [products]);
 
   // Fix hydration issue
@@ -251,7 +261,6 @@ export default function PricingPage() {
         'Brand': product.brand,
         'Category': product.category,
         'Subcategory': product.subcategory || '',
-        'Product Name': product.product_name,
         'Model Number': product.model_number,
         'Selling Price': product.selling_price,
         'Remarks': product.remarks || ''
@@ -260,7 +269,7 @@ export default function PricingPage() {
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
-      worksheet['!cols'] = Array(8).fill({ wch: 15 });
+      worksheet['!cols'] = Array(7).fill({ wch: 15 });
       XLSX.writeFile(workbook, `Products_${new Date().toISOString().split('T')[0]}.xlsx`);
       showToast(`Exported ${products.length} products`, 'success');
     } catch (error) {
@@ -273,7 +282,6 @@ export default function PricingPage() {
       const dataToExport = products.map((product, index) => ({
         'S.No': index + 1,
         'Brand': product.brand,
-        'Product': product.product_name,
         'Model': product.model_number,
         'Price': product.selling_price
       }));
@@ -340,7 +348,7 @@ export default function PricingPage() {
               deleted: false,
               deleted_at: null
             };
-          }).filter(product => product.product_name && product.model_number);
+          }).filter(product => product.model_number);
 
           if (productsToImport.length === 0) {
             showToast('No valid products found', 'warning');
@@ -410,12 +418,12 @@ export default function PricingPage() {
         return;
       }
 
-      if (!formData.product_name || !formData.model_number || !formData.category) {
+      if (!formData.model_number || !formData.category) {
         showToast('Please fill all required fields', 'error');
         return;
       }
 
-      // Use custom brand if "Custom" is selected and customBrand is filled
+      // Determine final brand
       const finalBrand = formData.brand === 'Custom' && formData.customBrand.trim() 
         ? formData.customBrand.trim() 
         : formData.brand;
@@ -425,12 +433,22 @@ export default function PricingPage() {
         return;
       }
 
+      // Determine final category
+      const finalCategory = formData.category === 'Custom' && formData.customCategory.trim()
+        ? formData.customCategory.trim()
+        : formData.category;
+
+      if (formData.category === 'Custom' && !formData.customCategory.trim()) {
+        showToast('Please enter custom category name', 'error');
+        return;
+      }
+
       const productData = {
         user_id: user.id,
         brand: finalBrand,
-        category: formData.category.trim(),
+        category: finalCategory,
         subcategory: formData.subcategory?.trim() || '',
-        product_name: formData.product_name.trim(),
+        product_name: formData.product_name?.trim() || '',
         model_number: formData.model_number.trim(),
         selling_price: parseFloat(formData.selling_price) || 0,
         remarks: formData.remarks?.trim() || '',
@@ -453,7 +471,7 @@ export default function PricingPage() {
       setShowModal(false);
       setEditingProduct(null);
       setFormData({
-        brand: 'ESSL', customBrand: '', category: '', subcategory: '', product_name: '',
+        brand: 'ESSL', customBrand: '', category: '', customCategory: '', subcategory: '', product_name: '',
         model_number: '', selling_price: '', remarks: ''
       });
     } catch (error: any) {
@@ -466,11 +484,14 @@ export default function PricingPage() {
 
     // Check if brand is in default list
     const isDefaultBrand = defaultBrands.find(b => b.name === product.brand);
+    // Check if category is in existing categories list
+    const isDefaultCategory = allCategories.includes(product.category);
 
     setFormData({
       brand: isDefaultBrand ? product.brand : 'Custom',
       customBrand: isDefaultBrand ? '' : product.brand,
-      category: product.category,
+      category: isDefaultCategory ? product.category : 'Custom',
+      customCategory: isDefaultCategory ? '' : product.category,
       subcategory: product.subcategory,
       product_name: product.product_name,
       model_number: product.model_number,
@@ -493,7 +514,6 @@ export default function PricingPage() {
     });
   };
 
-  // RESTORE FUNCTION
   const handleRestore = async (id: number) => {
     showConfirm('Restore this product?', async () => {
       try {
@@ -558,6 +578,9 @@ export default function PricingPage() {
   const clearFilters = () => {
     setFilters({ brand: '', category: '' });
     setSearchQuery('');
+    setModelSearch('');
+    setMinPrice('');
+    setMaxPrice('');
     setSelectedBrand('All');
     showToast('Filters cleared', 'info');
   };
@@ -572,6 +595,7 @@ export default function PricingPage() {
   // ============================================
 
   const filteredProducts = products.filter(product => {
+    // General search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesSearch = 
@@ -583,6 +607,16 @@ export default function PricingPage() {
       if (!matchesSearch) return false;
     }
 
+    // Model search
+    if (modelSearch) {
+      if (!product.model_number.toLowerCase().includes(modelSearch.toLowerCase())) return false;
+    }
+
+    // Price range
+    if (minPrice !== '' && product.selling_price < minPrice) return false;
+    if (maxPrice !== '' && product.selling_price > maxPrice) return false;
+
+    // Brand filters
     if (selectedBrand !== 'All' && product.brand !== selectedBrand) return false;
     if (filters.brand && product.brand !== filters.brand) return false;
     if (filters.category && product.category.toLowerCase() !== filters.category.toLowerCase()) return false;
@@ -601,7 +635,7 @@ export default function PricingPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filters.brand, filters.category, selectedBrand]);
+  }, [searchQuery, modelSearch, minPrice, maxPrice, filters.brand, filters.category, selectedBrand]);
 
   const renderPagination = () => {
     if (totalPages <= 1) return null;
@@ -839,7 +873,7 @@ export default function PricingPage() {
                   setShowModal(true);
                   setEditingProduct(null);
                   setFormData({
-                    brand: 'ESSL', customBrand: '', category: '', subcategory: '', product_name: '',
+                    brand: 'ESSL', customBrand: '', category: '', customCategory: '', subcategory: '', product_name: '',
                     model_number: '', selling_price: '', remarks: ''
                   });
                 }}
@@ -955,35 +989,111 @@ export default function PricingPage() {
                 </div>
               </div>
 
+              {/* ========== ENHANCED FILTER SECTION ========== */}
               {showFilters && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <select
-                      name="brand"
-                      value={filters.brand}
-                      onChange={handleFilterChange}
-                      className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                    >
-                      <option value="">All Brands</option>
-                      {allBrands.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                    </select>
-                    <input
-                      type="text"
-                      name="category"
-                      placeholder="Filter by category"
-                      value={filters.category}
-                      onChange={handleFilterChange}
-                      className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                    />
-                    <button
-                      onClick={clearFilters}
-                      className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium"
-                    >
-                      Clear
-                    </button>
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-700">
+                      <Filter size={16} className="text-teal-600" />
+                      <span>Advanced Filters</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* Brand Filter */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Tag size={14} className="text-gray-400" />
+                        </div>
+                        <select
+                          name="brand"
+                          value={filters.brand}
+                          onChange={handleFilterChange}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-800 appearance-none"
+                        >
+                          <option value="">All Brands</option>
+                          {allBrands.map(b => (
+                            <option key={b.name} value={b.name}>
+                              {b.emoji} {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Category Filter (Dropdown from existing categories) */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Tag size={14} className="text-gray-400" />
+                        </div>
+                        <select
+                          name="category"
+                          value={filters.category}
+                          onChange={handleFilterChange}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-800 appearance-none"
+                        >
+                          <option value="">All Categories</option>
+                          {allCategories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Model Search */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Search size={14} className="text-gray-400" />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Model number"
+                          value={modelSearch}
+                          onChange={(e) => setModelSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-800"
+                        />
+                      </div>
+
+                      {/* Price Range */}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-xs text-gray-500">₹</span>
+                          </div>
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            value={minPrice}
+                            onChange={(e) => setMinPrice(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full pl-7 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-800"
+                          />
+                        </div>
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-xs text-gray-500">₹</span>
+                          </div>
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            value={maxPrice}
+                            onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full pl-7 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-800"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    <div className="flex justify-end mt-3">
+                      <button
+                        onClick={clearFilters}
+                        className="px-4 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <X size={14} />
+                        Clear all filters
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
+              {/* ========== END ENHANCED FILTER SECTION ========== */}
 
               {selectedProducts.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
@@ -1017,7 +1127,6 @@ export default function PricingPage() {
                       </th>
                       <th className="p-2 text-left font-semibold whitespace-nowrap">S.No</th>
                       <th className="p-2 text-left font-semibold whitespace-nowrap">Brand</th>
-                      <th className="p-2 text-left font-semibold whitespace-nowrap">Product</th>
                       <th className="p-2 text-left font-semibold whitespace-nowrap">Category</th>
                       <th className="p-2 text-left font-semibold whitespace-nowrap">Model</th>
                       <th className="p-2 text-left font-semibold whitespace-nowrap">Selling Price</th>
@@ -1028,7 +1137,7 @@ export default function PricingPage() {
                   <tbody>
                     {currentProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-8 text-center text-gray-500">
+                        <td colSpan={8} className="p-8 text-center text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <AlertCircle size={32} className="text-gray-400" />
                             <p className="text-sm">No products found</p>
@@ -1053,7 +1162,6 @@ export default function PricingPage() {
                               <span className="font-medium text-gray-900">{product.brand}</span>
                             </div>
                           </td>
-                          <td className="p-2 font-medium text-gray-900 whitespace-nowrap">{product.product_name}</td>
                           <td className="p-2 text-gray-600 whitespace-nowrap">
                             <div>{product.category}</div>
                             {product.subcategory && <div className="text-xs text-gray-500">{product.subcategory}</div>}
@@ -1117,7 +1225,7 @@ export default function PricingPage() {
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="p-2 text-left font-semibold">Brand</th>
-                      <th className="p-2 text-left font-semibold">Product</th>
+                      <th className="p-2 text-left font-semibold">Category</th>
                       <th className="p-2 text-left font-semibold">Model</th>
                       <th className="p-2 text-left font-semibold">Price</th>
                       <th className="p-2 text-left font-semibold">Deleted Date</th>
@@ -1135,7 +1243,7 @@ export default function PricingPage() {
                       trashedProducts.map(product => (
                         <tr key={product.id} className="border-b border-gray-100">
                           <td className="p-2 font-medium text-gray-900">{product.brand}</td>
-                          <td className="p-2 text-gray-600">{product.product_name}</td>
+                          <td className="p-2 text-gray-600">{product.category}</td>
                           <td className="p-2 text-gray-600">{product.model_number}</td>
                           <td className="p-2 text-gray-600">₹{product.selling_price.toLocaleString()}</td>
                           <td className="p-2 text-gray-600">
@@ -1188,6 +1296,7 @@ export default function PricingPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
+                  {/* Brand field */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Brand <span className="text-red-500">*</span>
@@ -1221,20 +1330,40 @@ export default function PricingPage() {
                     </div>
                   )}
 
+                  {/* Category field - now a dropdown */}
                   <div className={formData.brand !== 'Custom' ? 'md:col-start-2' : ''}>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Category <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(Type your own)</span>
+                      Category <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800"
-                      placeholder="e.g. Biometric, CCTV, Access Control"
                       required
-                    />
+                    >
+                      <option value="">Select Category</option>
+                      {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      <option value="Custom">➕ Add Custom Category</option>
+                    </select>
                   </div>
+
+                  {formData.category === 'Custom' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Custom Category Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="customCategory"
+                        value={formData.customCategory}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800"
+                        placeholder="Enter new category name"
+                        required
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1250,20 +1379,8 @@ export default function PricingPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Product Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="product_name"
-                      value={formData.product_name}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800"
-                      placeholder="Enter product name"
-                      required
-                    />
-                  </div>
+                  {/* Hidden product_name field - kept for DB but not displayed */}
+                  <input type="hidden" name="product_name" value={formData.product_name} onChange={handleInputChange} />
 
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
