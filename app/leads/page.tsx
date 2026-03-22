@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import { Plus, Edit2, Trash2, X, Filter, Menu, LayoutDashboard, Users, CreditCard, Settings, Package, DollarSign, Headphones, Calendar, RotateCcw, Trash, Download, Upload, CheckCircle, AlertCircle, Info, Search, Check, Eye, MessageSquare } from 'lucide-react';
 
 // ============================================
-// INTERFACES (UPDATED WITH "Very High")
+// INTERFACES
 // ============================================
 
 interface Followup {
@@ -35,7 +35,7 @@ interface Lead {
   requirement?: string;
   followups?: Followup[];
   notes: string;
-  status: 'Only Inquiry' | 'Quote Shared' | 'DI Shared' | 'Converted' | 'Lost' | 'Wanted' | 'Postponed';
+  status: 'Only Inquiry' | 'Quote Shared' | 'PI Shared' | 'Converted' | 'Lost' | 'Wanted' | 'Postponed';
   last_updated: string;
   deleted: boolean;
   deleted_at: string | null;
@@ -57,7 +57,7 @@ interface FormData {
   requirement: string;
   followups: Followup[];
   notes: string;
-  status: 'Only Inquiry' | 'Quote Shared' | 'DI Shared' | 'Converted' | 'Lost' | 'Wanted' | 'Postponed';
+  status: 'Only Inquiry' | 'Quote Shared' | 'PI Shared' | 'Converted' | 'Lost' | 'Wanted' | 'Postponed';
 }
 
 interface Filters {
@@ -66,7 +66,7 @@ interface Filters {
   interest: string;
   status: string;
   customer_category: string;
-  followups: string; // NEW: Added follow-ups filter
+  followups: string;
 }
 
 interface MenuItem {
@@ -84,6 +84,19 @@ interface Toast {
 }
 
 // ============================================
+// HELPER: Format date to "21 Sep 2026"
+// ============================================
+const formatDateToWords = (dateString: string | null | undefined): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+  const day = date.getDate();
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
+// ============================================
 // MAIN COMPONENT
 // ============================================
 
@@ -96,7 +109,6 @@ export default function LeadsPage() {
   const [showFollowupsModal, setShowFollowupsModal] = useState(false);
   const [selectedFollowups, setSelectedFollowups] = useState<Followup[]>([]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -104,26 +116,24 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<number[]>([]);
-  
-  // ============================================
-  // PAGINATION STATE
-  // ============================================
+
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  
+
   const router = useRouter();
   const handleNavigation = (path: string) => {
     router.push(`/${path}`);
   };
 
-  // UPDATED: Added followups filter
+  // Filters (always visible)
   const [filters, setFilters] = useState<Filters>({
     source: '',
     product: '',
     interest: '',
     status: '',
     customer_category: '',
-    followups: '' // NEW: Added follow-ups filter
+    followups: ''
   });
 
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -148,7 +158,7 @@ export default function LeadsPage() {
   });
 
   // ============================================
-  // ✅ NEW: INLINE INTEREST UPDATE FUNCTION
+  // INLINE INTEREST & STATUS UPDATE FUNCTIONS
   // ============================================
 
   const handleInterestChange = async (leadId: number, newInterest: 'Very High' | 'High' | 'Medium' | 'Low') => {
@@ -176,27 +186,49 @@ export default function LeadsPage() {
     }
   };
 
+  const handleStatusChange = async (leadId: number, newStatus: Lead['status']) => {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          status: newStatus,
+          last_updated: new Date().toISOString().split('T')[0]
+        })
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      setLeads(prevLeads =>
+        prevLeads.map(lead =>
+          lead.id === leadId ? { ...lead, status: newStatus } : lead
+        )
+      );
+
+      showToast(`Status updated to ${newStatus}`, 'success');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      showToast('Failed to update status', 'error');
+    }
+  };
+
   // ============================================
-  // FOLLOW-UP HELPER FUNCTIONS
+  // FOLLOW-UP HELPER FUNCTIONS (UNLIMITED)
   // ============================================
 
   const addFollowup = () => {
-    if (formData.followups.length < 5) {
-      setFormData(prev => ({
-        ...prev,
-        followups: [
-          ...prev.followups,
-          {
-            number: prev.followups.length + 1,
-            date: '',
-            discussion: '',
-            done_by: ''
-          }
-        ]
-      }));
-    } else {
-      showToast('Maximum 5 follow-ups allowed', 'warning');
-    }
+    // No limit - user requested unlimited
+    setFormData(prev => ({
+      ...prev,
+      followups: [
+        ...prev.followups,
+        {
+          number: prev.followups.length + 1,
+          date: '',
+          discussion: '',
+          done_by: ''
+        }
+      ]
+    }));
   };
 
   const removeFollowup = (index: number) => {
@@ -331,7 +363,7 @@ export default function LeadsPage() {
         'Customer Name': lead.name,
         'Email': lead.email || '',
         'Phone': lead.phone,
-        'Location': lead.location,
+        'Address': lead.location, // Changed label to Address
         'Customer Category': lead.customer_category || '',
         'Source': lead.source,
         'Source Reference': lead.source_reference || '',
@@ -341,7 +373,7 @@ export default function LeadsPage() {
         'Interest': lead.interest,
         'Status': lead.status,
         'Requirement': lead.requirement || '',
-        'Notes': lead.notes || '',
+        'Additional Notes': lead.notes || '', // Changed label
         'Follow-ups': lead.followups ? JSON.stringify(lead.followups) : '',
         'Last Updated': lead.last_updated || ''
       }));
@@ -371,7 +403,7 @@ export default function LeadsPage() {
         'Customer Name': lead.name,
         'Email': lead.email || '',
         'Phone': lead.phone,
-        'Location': lead.location,
+        'Address': lead.location, // Changed label
         'Customer Category': lead.customer_category || '',
         'Source': lead.source,
         'Source Reference': lead.source_reference || '',
@@ -381,7 +413,7 @@ export default function LeadsPage() {
         'Interest': lead.interest,
         'Status': lead.status,
         'Requirement': lead.requirement || '',
-        'Notes': lead.notes || '',
+        'Additional Notes': lead.notes || '', // Changed label
         'Follow-ups': lead.followups ? JSON.stringify(lead.followups) : '',
         'Last Updated': lead.last_updated || ''
       }));
@@ -442,7 +474,7 @@ export default function LeadsPage() {
               email: normalizedRow['email'] || '',
               customer_category: normalizedRow['customer category'] || 'Uncategorized',
               phone: String(normalizedRow['phone'] || ''),
-              location: normalizedRow['location'] || '',
+              location: normalizedRow['address'] || normalizedRow['location'] || '', // Handle both
               source: normalizedRow['source'] || 'Import',
               source_reference: normalizedRow['source reference'] || '',
               product: normalizedRow['product'] || 'Attendance',
@@ -452,11 +484,11 @@ export default function LeadsPage() {
                 ? normalizedRow['interest']
                 : 'Medium',
               requirement: normalizedRow['requirement'] || '',
-              status: ['Only Inquiry', 'Quote Shared', 'DI Shared', 'Converted', 'Lost', 'Wanted', 'Postponed'].includes(normalizedRow['status'])
+              status: ['Only Inquiry', 'Quote Shared', 'PI Shared', 'Converted', 'Lost', 'Wanted', 'Postponed'].includes(normalizedRow['status'])
                 ? normalizedRow['status']
                 : 'Only Inquiry',
               followups: normalizedRow['follow-ups'] ? JSON.parse(normalizedRow['follow-ups']) : [],
-              notes: normalizedRow['notes'] || '',
+              notes: normalizedRow['additional notes'] || normalizedRow['notes'] || '',
               last_updated: new Date().toISOString().split('T')[0],
               deleted: false,
               deleted_at: null
@@ -566,13 +598,10 @@ export default function LeadsPage() {
 
   const handleSelectAll = () => {
     if (selectedLeads.length === currentLeads.length) {
-      // Deselect all on current page
       setSelectedLeads(prev => prev.filter(id => !currentLeads.some(lead => lead.id === id)));
     } else {
-      // Select all on current page
       const currentPageIds = currentLeads.map(lead => lead.id);
       setSelectedLeads(prev => {
-        // Combine with previously selected leads from other pages
         const newSelection = [...prev];
         currentPageIds.forEach(id => {
           if (!newSelection.includes(id)) {
@@ -613,7 +642,7 @@ export default function LeadsPage() {
       interest: '',
       status: '',
       customer_category: '',
-      followups: '' // NEW: Clear follow-ups filter
+      followups: ''
     });
     showToast('Filters cleared', 'info');
   };
@@ -771,7 +800,7 @@ export default function LeadsPage() {
     const colors: Record<string, string> = {
       'Only Inquiry': 'bg-blue-50 text-blue-700 border border-blue-200',
       'Quote Shared': 'bg-purple-50 text-purple-700 border border-purple-200',
-      'DI Shared': 'bg-amber-50 text-amber-700 border border-amber-200',
+      'PI Shared': 'bg-amber-50 text-amber-700 border border-amber-200',
       'Converted': 'bg-green-50 text-green-700 border border-green-200',
       'Lost': 'bg-red-50 text-red-700 border border-red-200',
       'Wanted': 'bg-indigo-50 text-indigo-700 border border-indigo-200',
@@ -784,7 +813,6 @@ export default function LeadsPage() {
   // PAGINATION LOGIC
   // ============================================
 
-  // Filter leads based on search and filters
   const filteredLeads = leads.filter(lead => {
     const matchesSearch =
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -802,11 +830,10 @@ export default function LeadsPage() {
     if (filters.interest && lead.interest !== filters.interest) return false;
     if (filters.status && lead.status !== filters.status) return false;
     if (filters.customer_category && lead.customer_category !== filters.customer_category) return false;
-    
-    // NEW: Follow-ups filter logic
+
     if (filters.followups) {
       const followupCount = lead.followups ? lead.followups.length : 0;
-      
+
       switch (filters.followups) {
         case 'none':
           if (followupCount > 0) return false;
@@ -828,78 +855,65 @@ export default function LeadsPage() {
     return true;
   });
 
-  // Calculate pagination values
   const totalItems = filteredLeads.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
   const currentLeads = filteredLeads.slice(startIndex, endIndex);
 
-  // Page change handlers
   const goToFirstPage = () => setCurrentPage(1);
   const goToLastPage = () => setCurrentPage(totalPages);
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
-  
+
   const goToPage = (pageNumber: number) => {
     if (pageNumber >= 1 && pageNumber <= totalPages) {
       setCurrentPage(pageNumber);
     }
   };
 
-  // Generate page numbers for display
   const getPageNumbers = () => {
     const pages = [];
     const maxVisiblePages = 5;
-    
+
     if (totalPages <= maxVisiblePages) {
-      // Show all pages if less than maxVisiblePages
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // Always show first page
       pages.push(1);
-      
-      // Calculate start and end of visible pages
+
       let start = Math.max(2, currentPage - 1);
       let end = Math.min(totalPages - 1, currentPage + 1);
-      
-      // Adjust if at the beginning
+
       if (currentPage <= 3) {
         start = 2;
         end = 4;
       }
-      
-      // Adjust if at the end
+
       if (currentPage >= totalPages - 2) {
         start = totalPages - 3;
         end = totalPages - 1;
       }
-      
-      // Add ellipsis after first page if needed
+
       if (start > 2) {
         pages.push('...');
       }
-      
-      // Add middle pages
+
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
-      
-      // Add ellipsis before last page if needed
+
       if (end < totalPages - 1) {
         pages.push('...');
       }
-      
-      // Always show last page
+
       pages.push(totalPages);
     }
-    
+
     return pages;
   };
 
-  // Reset to first page when filters or search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [filters, searchTerm, itemsPerPage]);
@@ -1000,7 +1014,7 @@ export default function LeadsPage() {
                     placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
+                    className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 transition-all duration-200"
                   />
                 </div>
               </div>
@@ -1008,38 +1022,31 @@ export default function LeadsPage() {
               {/* Compact Buttons */}
               <div className="flex gap-1.5 flex-wrap flex-shrink-0">
                 <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-medium flex items-center gap-1"
-                >
-                  <Filter size={14} />
-                  <span className="hidden sm:inline">Filter</span>
-                </button>
-                <button
                   onClick={handleExportExcel}
-                  className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium flex items-center gap-1"
+                  className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium flex items-center gap-1 transition-colors duration-200"
                 >
                   <Download size={14} />
                   <span className="hidden sm:inline">Excel</span>
                 </button>
                 <button
                   onClick={handleExportCSV}
-                  className="px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium flex items-center gap-1"
+                  className="px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium flex items-center gap-1 transition-colors duration-200"
                 >
                   <Download size={14} />
                   <span className="hidden sm:inline">CSV</span>
                 </button>
-                <label className="px-2.5 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-xs font-medium flex items-center gap-1 cursor-pointer">
+                <label className="px-2.5 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors duration-200">
                   <Upload size={14} />
                   <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
                 </label>
                 {lastImportedIds.length > 0 && (
-                  <button onClick={handleUndoImport} className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded text-xs font-medium flex items-center gap-1">
+                  <button onClick={handleUndoImport} className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded text-xs font-medium flex items-center gap-1 transition-colors duration-200">
                     <RotateCcw size={14} />
                   </button>
                 )}
                 <button
                   onClick={() => setShowTrash(!showTrash)}
-                  className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1"
+                  className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1 transition-colors duration-200"
                 >
                   <Trash size={14} />
                   <span>({trashedLeads.length})</span>
@@ -1047,41 +1054,68 @@ export default function LeadsPage() {
               </div>
             </div>
 
-            {/* Filters Panel */}
-            {showFilters && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                  <select name="source" value={filters.source} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+            {/* Filters Panel - Always Visible */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[120px]">
+                  <select name="source" value={filters.source} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Sources</option>
                     {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <select name="product" value={filters.product} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <select name="product" value={filters.product} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Products</option>
                     {uniqueProducts.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
-                  <select name="interest" value={filters.interest} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <select name="interest" value={filters.interest} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Interest</option>
                     <option value="Very High">Very High</option>
                     <option value="High">High</option>
                     <option value="Medium">Medium</option>
                     <option value="Low">Low</option>
                   </select>
-                  <select name="status" value={filters.status} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <select name="status" value={filters.status} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Status</option>
                     <option value="Only Inquiry">Only Inquiry</option>
                     <option value="Quote Shared">Quote Shared</option>
-                    <option value="DI Shared">DI Shared</option>
+                    <option value="PI Shared">PI Shared</option>
                     <option value="Converted">Converted</option>
                     <option value="Lost">Lost</option>
                     <option value="Wanted">Wanted</option>
                     <option value="Postponed">Postponed</option>
                   </select>
-                  <select name="customer_category" value={filters.customer_category} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <select name="customer_category" value={filters.customer_category} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Categories</option>
                     {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  {/* NEW: Follow-ups Filter */}
-                  <select name="followups" value={filters.followups} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <select name="followups" value={filters.followups} onChange={handleFilterChange}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 hover:shadow-sm appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
+                  >
                     <option value="">All Follow-ups</option>
                     <option value="none">No Follow-ups</option>
                     <option value="1-2">1-2 Follow-ups</option>
@@ -1089,19 +1123,19 @@ export default function LeadsPage() {
                     <option value="5+">5+ Follow-ups</option>
                   </select>
                 </div>
-                <div className="mt-2 flex justify-end">
-                  <button onClick={clearFilters} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium">
+                <div>
+                  <button onClick={clearFilters} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium whitespace-nowrap transition-colors duration-200">
                     Clear All Filters
                   </button>
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Bulk Actions */}
             {selectedLeads.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                 <p className="text-xs text-gray-600 font-medium">{selectedLeads.length} selected</p>
-                <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1">
+                <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1 transition-colors duration-200">
                   <Trash size={14} />
                   Delete
                 </button>
@@ -1118,11 +1152,11 @@ export default function LeadsPage() {
                     <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <tr>
                         <th className="w-8 px-2 py-2">
-                          <input 
-                            type="checkbox" 
-                            checked={currentLeads.length > 0 && currentLeads.every(lead => selectedLeads.includes(lead.id))} 
-                            onChange={handleSelectAll} 
-                            className="rounded" 
+                          <input
+                            type="checkbox"
+                            checked={currentLeads.length > 0 && currentLeads.every(lead => selectedLeads.includes(lead.id))}
+                            onChange={handleSelectAll}
+                            className="rounded"
                           />
                         </th>
                         <th className="w-10 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">No</th>
@@ -1131,8 +1165,8 @@ export default function LeadsPage() {
                         <th className="w-24 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Source</th>
                         <th className="w-28 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Product</th>
                         <th className="w-20 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Interest</th>
-                        <th className="w-20 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight whitespace-nowrap">Follow-ups</th>
-                        <th className="w-32 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Notes</th>
+                        <th className="w-20 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Follow-ups</th>
+                        <th className="w-32 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Additional Notes</th>
                         <th className="w-28 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Status</th>
                         <th className="w-16 px-2 py-2 text-left font-semibold text-gray-700 uppercase tracking-tight">Actions</th>
                       </tr>
@@ -1158,7 +1192,7 @@ export default function LeadsPage() {
                               {lead.customer_category && <div className="text-[10px] text-gray-500 truncate">{lead.customer_category}</div>}
                             </td>
 
-                            {/* Contact */}
+                            {/* Contact - Changed Location to Address */}
                             <td className="px-2 py-2">
                               <div className="font-medium text-gray-900 truncate leading-tight">{lead.phone}</div>
                               <div className="text-[10px] text-gray-500 truncate">{lead.location}</div>
@@ -1182,8 +1216,8 @@ export default function LeadsPage() {
                               <select
                                 value={lead.interest}
                                 onChange={(e) => handleInterestChange(lead.id, e.target.value as any)}
-                                className={`w-full px-1.5 py-0.5 rounded text-[10px] font-semibold border-0 cursor-pointer ${getInterestBadge(lead.interest)}`}
-                                style={{ appearance: 'none', backgroundImage: 'none' }}
+                                className={`w-full px-1.5 py-0.5 rounded text-[10px] font-semibold border-0 cursor-pointer transition-all duration-200 focus:ring-1 focus:ring-indigo-400 ${getInterestBadge(lead.interest)}`}
+                                style={{ appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '0.75rem' }}
                               >
                                 <option value="Very High">Very High</option>
                                 <option value="High">High</option>
@@ -1197,7 +1231,7 @@ export default function LeadsPage() {
                               {lead.followups && lead.followups.length > 0 ? (
                                 <button
                                   onClick={() => showFollowups(lead.followups)}
-                                  className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-[10px] font-medium whitespace-nowrap"
+                                  className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-[10px] font-medium whitespace-nowrap transition-colors duration-200"
                                 >
                                   <Eye size={12} />
                                   ({lead.followups.length})
@@ -1207,7 +1241,7 @@ export default function LeadsPage() {
                               )}
                             </td>
 
-                            {/* Notes */}
+                            {/* Additional Notes */}
                             <td className="px-2 py-2">
                               {lead.notes ? (
                                 <div className="flex items-center gap-1">
@@ -1216,7 +1250,7 @@ export default function LeadsPage() {
                                   </span>
                                   <button
                                     onClick={() => showNotes(lead.notes)}
-                                    className="text-indigo-600 hover:text-indigo-700 flex-shrink-0"
+                                    className="text-indigo-600 hover:text-indigo-700 flex-shrink-0 transition-colors duration-200"
                                   >
                                     <Eye size={12} />
                                   </button>
@@ -1226,20 +1260,31 @@ export default function LeadsPage() {
                               )}
                             </td>
 
-                            {/* Status */}
+                            {/* Status - Inline Editable */}
                             <td className="px-2 py-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap inline-block ${getStatusColor(lead.status)}`}>
-                                {lead.status}
-                              </span>
+                              <select
+                                value={lead.status}
+                                onChange={(e) => handleStatusChange(lead.id, e.target.value as Lead['status'])}
+                                className={`w-full px-1.5 py-0.5 rounded text-[10px] font-semibold border-0 cursor-pointer transition-all duration-200 focus:ring-1 focus:ring-indigo-400 ${getStatusColor(lead.status)}`}
+                                style={{ appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '0.75rem' }}
+                              >
+                                <option value="Only Inquiry">Only Inquiry</option>
+                                <option value="Quote Shared">Quote Shared</option>
+                                <option value="PI Shared">PI Shared</option>
+                                <option value="Converted">Converted</option>
+                                <option value="Lost">Lost</option>
+                                <option value="Wanted">Wanted</option>
+                                <option value="Postponed">Postponed</option>
+                              </select>
                             </td>
 
                             {/* Actions */}
                             <td className="px-2 py-2">
                               <div className="flex gap-1">
-                                <button onClick={() => handleEdit(lead)} className="text-blue-600 hover:text-blue-800 p-0.5 hover:bg-blue-50 rounded" title="Edit">
+                                <button onClick={() => handleEdit(lead)} className="text-blue-600 hover:text-blue-800 p-0.5 hover:bg-blue-50 rounded transition-colors duration-200" title="Edit">
                                   <Edit2 size={13} />
                                 </button>
-                                <button onClick={() => handleDelete(lead.id)} className="text-red-600 hover:text-red-800 p-0.5 hover:bg-red-50 rounded" title="Delete">
+                                <button onClick={() => handleDelete(lead.id)} className="text-red-600 hover:text-red-800 p-0.5 hover:bg-red-50 rounded transition-colors duration-200" title="Delete">
                                   <Trash2 size={13} />
                                 </button>
                               </div>
@@ -1250,15 +1295,15 @@ export default function LeadsPage() {
                     </tbody>
                   </table>
                 </div>
-                
+
                 {/* Pagination Controls */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
-                  {/* Items per page selector */}
                   <div className="mb-3 sm:mb-0">
                     <select
                       value={itemsPerPage}
                       onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                      className="px-2 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-700"
+                      className="px-2 py-1.5 border border-gray-300 rounded text-xs bg-white text-gray-700 transition-all duration-200 focus:ring-2 focus:ring-indigo-300 appearance-none"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                     >
                       <option value={10}>10 per page</option>
                       <option value={20}>20 per page</option>
@@ -1266,82 +1311,70 @@ export default function LeadsPage() {
                       <option value={100}>100 per page</option>
                     </select>
                   </div>
-                  
-                  {/* Results count */}
+
                   <div className="mb-3 sm:mb-0 text-xs text-gray-600">
                     Showing <span className="font-semibold">{startIndex + 1}</span> to{" "}
                     <span className="font-semibold">{endIndex}</span> of{" "}
                     <span className="font-semibold">{totalItems}</span> results
                   </div>
-                  
-                  {/* Pagination buttons */}
+
                   <div className="flex items-center space-x-1">
-                    {/* First Page */}
                     <button
                       onClick={goToFirstPage}
                       disabled={currentPage === 1}
-                      className={`px-2.5 py-1.5 text-xs font-medium rounded ${
-                        currentPage === 1
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === 1
                           ? "text-gray-400 cursor-not-allowed bg-gray-100"
                           : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
-                      }`}
+                        }`}
                     >
                       First
                     </button>
-                    
-                    {/* Previous Page */}
+
                     <button
                       onClick={goToPrevPage}
                       disabled={currentPage === 1}
-                      className={`px-2.5 py-1.5 text-xs font-medium rounded ${
-                        currentPage === 1
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === 1
                           ? "text-gray-400 cursor-not-allowed bg-gray-100"
                           : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
-                      }`}
+                        }`}
                     >
                       &lt; Prev
                     </button>
-                    
-                    {/* Page Numbers */}
+
                     {getPageNumbers().map((page, index) => (
                       <button
                         key={index}
                         onClick={() => typeof page === 'number' ? goToPage(page) : null}
                         disabled={page === '...'}
-                        className={`px-3 py-1.5 text-xs font-medium rounded ${
-                          page === currentPage
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-all duration-200 ${page === currentPage
                             ? "bg-indigo-600 text-white border border-indigo-600"
                             : page === '...'
-                            ? "text-gray-400 cursor-default bg-white"
-                            : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
-                        }`}
+                              ? "text-gray-400 cursor-default bg-white"
+                              : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                          }`}
                       >
                         {page}
                       </button>
                     ))}
-                    
-                    {/* Next Page */}
+
                     <button
                       onClick={goToNextPage}
                       disabled={currentPage === totalPages}
-                      className={`px-2.5 py-1.5 text-xs font-medium rounded ${
-                        currentPage === totalPages
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === totalPages
                           ? "text-gray-400 cursor-not-allowed bg-gray-100"
                           : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
-                      }`}
+                        }`}
                     >
                       Next &gt;
                     </button>
-                    
-                    {/* Last Page */}
+
                     <button
                       onClick={goToLastPage}
                       disabled={currentPage === totalPages}
-                      className={`px-2.5 py-1.5 text-xs font-medium rounded ${
-                        currentPage === totalPages
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === totalPages
                           ? "text-gray-400 cursor-not-allowed bg-gray-100"
                           : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
-                      }`}
+                        }`}
                     >
                       Last
                     </button>
@@ -1350,7 +1383,7 @@ export default function LeadsPage() {
               </div>
             </>
           ) : (
-            /* ✅ TRASH VIEW - Matching Image Reference */
+            /* Trash View */
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1365,7 +1398,7 @@ export default function LeadsPage() {
                 </div>
                 <button
                   onClick={() => setShowTrash(false)}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium"
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-colors duration-200"
                 >
                   Back
                 </button>
@@ -1399,15 +1432,14 @@ export default function LeadsPage() {
                             <span className={`px-2 py-1 rounded text-xs font-medium ${lead.status === 'Converted' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-orange-100 text-orange-700 border border-orange-300'}`}>
                               {lead.status === 'Converted' ? 'Received' : lead.status}
                             </span>
-
                           </td>
                           <td className="px-4 py-3 text-gray-600">
-                            {lead.deleted_at ? new Date(lead.deleted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Unknown'}
+                            {lead.deleted_at ? formatDateToWords(lead.deleted_at) : 'Unknown'}
                           </td>
                           <td className="px-4 py-3">
                             <button
                               onClick={() => handleRestore(lead.id)}
-                              className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium"
+                              className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium transition-colors duration-200"
                             >
                               Restore
                             </button>
@@ -1463,10 +1495,10 @@ export default function LeadsPage() {
                 </div>
                 <p className="text-sm text-gray-600 mb-5">{confirmAction.message}</p>
                 <div className="flex gap-2">
-                  <button onClick={handleConfirm} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  <button onClick={handleConfirm} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200">
                     Confirm
                   </button>
-                  <button onClick={() => setShowConfirmModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium">
+                  <button onClick={() => setShowConfirmModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200">
                     Cancel
                   </button>
                 </div>
@@ -1485,9 +1517,9 @@ export default function LeadsPage() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
                 <div className="flex items-center gap-2">
                   <MessageSquare size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-gray-800 text-sm">Notes</h3>
+                  <h3 className="font-semibold text-gray-800 text-sm">Additional Notes</h3>
                 </div>
-                <button onClick={() => setShowNotesModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded">
+                <button onClick={() => setShowNotesModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded transition-colors duration-200">
                   <X size={16} />
                 </button>
               </div>
@@ -1495,7 +1527,7 @@ export default function LeadsPage() {
                 <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedNotes}</p>
               </div>
               <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 flex justify-end">
-                <button onClick={() => setShowNotesModal(false)} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium">
+                <button onClick={() => setShowNotesModal(false)} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium transition-colors duration-200">
                   Close
                 </button>
               </div>
@@ -1515,7 +1547,7 @@ export default function LeadsPage() {
                   <MessageSquare size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-gray-800 text-sm">Follow-up History</h3>
                 </div>
-                <button onClick={() => setShowFollowupsModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded">
+                <button onClick={() => setShowFollowupsModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded transition-colors duration-200">
                   <X size={16} />
                 </button>
               </div>
@@ -1533,7 +1565,7 @@ export default function LeadsPage() {
                             </div>
                             <span className="font-semibold text-gray-800 text-xs">Follow-up #{followup.number}</span>
                           </div>
-                          <span className="text-[10px] text-gray-600">{followup.date}</span>
+                          <span className="text-[10px] text-gray-600">{formatDateToWords(followup.date)}</span>
                         </div>
                         <p className="text-xs text-gray-700 mb-1.5">{followup.discussion}</p>
                         <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
@@ -1569,7 +1601,7 @@ export default function LeadsPage() {
                     </div>
                     <h2 className="text-lg font-bold text-white">{editingLead ? 'Edit Lead' : 'Add New Lead'}</h2>
                   </div>
-                  <button onClick={() => { setShowModal(false); setEditingLead(null); }} className="text-white hover:bg-white/20 p-1.5 rounded">
+                  <button onClick={() => { setShowModal(false); setEditingLead(null); }} className="text-white hover:bg-white/20 p-1.5 rounded transition-colors duration-200">
                     <X size={18} />
                   </button>
                 </div>
@@ -1589,10 +1621,10 @@ export default function LeadsPage() {
                         Basic Details
                       </h3>
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="text" name="name" placeholder="Customer Name *" required value={formData.name} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
-                        <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
-                        <input type="tel" name="phone" placeholder="Phone *" required value={formData.phone} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
-                        <select name="customer_category" value={formData.customer_category} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white">
+                        <input type="text" name="name" placeholder="Customer Name *" required value={formData.name} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
+                        <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
+                        <input type="tel" name="phone" placeholder="Phone *" required value={formData.phone} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
+                        <select name="customer_category" value={formData.customer_category} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                           <option value="Office">Office</option>
                           <option value="Industry">Industry</option>
                           <option value="Education">Education</option>
@@ -1601,7 +1633,7 @@ export default function LeadsPage() {
                           <option value="Residence">Residence</option>
                           <option value="Uncategorized">Uncategorized</option>
                         </select>
-                        <input type="text" name="location" placeholder="Location *" required value={formData.location} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
+                        <input type="text" name="location" placeholder="Address *" required value={formData.location} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                       </div>
                     </div>
 
@@ -1612,7 +1644,7 @@ export default function LeadsPage() {
                         Source & Interest
                       </h3>
                       <div className="grid grid-cols-2 gap-2">
-                        <select name="source" value={formData.source} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white">
+                        <select name="source" value={formData.source} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                           <option value="India Mart">India Mart</option>
                           <option value="YouTube">YouTube</option>
                           <option value="GMB">GMB</option>
@@ -1622,13 +1654,13 @@ export default function LeadsPage() {
                           <option value="Reference">Reference</option>
                         </select>
                         {formData.source === 'Reference' && (
-                          <select name="source_reference" value={formData.source_reference} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white">
+                          <select name="source_reference" value={formData.source_reference} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                             <option value="">Select Reference</option>
                             <option value="ESSL">ESSL</option>
                             <option value="Advice">Advice</option>
                           </select>
                         )}
-                        <select name="interest" value={formData.interest} onChange={handleInputChange} className={`px-2.5 py-2 border rounded text-xs text-gray-800 bg-white ${formData.source === 'Reference' ? '' : 'col-span-2'}`}>
+                        <select name="interest" value={formData.interest} onChange={handleInputChange} className={`px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none ${formData.source === 'Reference' ? '' : 'col-span-2'}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                           <option value="Very High">Very High</option>
                           <option value="High">High</option>
                           <option value="Medium">Medium</option>
@@ -1644,7 +1676,7 @@ export default function LeadsPage() {
                         Product Details
                       </h3>
                       <div className="grid grid-cols-3 gap-2">
-                        <select name="product" value={formData.product} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white">
+                        <select name="product" value={formData.product} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                           <option value="Attendance">Attendance</option>
                           <option value="Access">Access</option>
                           <option value="CCTV">CCTV</option>
@@ -1653,8 +1685,8 @@ export default function LeadsPage() {
                           <option value="Software">Software</option>
                           <option value="Service">Service</option>
                         </select>
-                        <input type="text" name="product_name" placeholder="Product Name" value={formData.product_name} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
-                        <input type="text" name="quantity" placeholder="Qty" value={formData.quantity} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
+                        <input type="text" name="product_name" placeholder="Product Name" value={formData.product_name} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
+                        <input type="text" name="quantity" placeholder="Qty" value={formData.quantity} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                       </div>
                     </div>
 
@@ -1664,21 +1696,21 @@ export default function LeadsPage() {
                         <div className="w-1 h-1 rounded-full bg-amber-500"></div>
                         Requirement
                       </h3>
-                      <textarea name="requirement" placeholder="Customer requirement..." rows={2} value={formData.requirement} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
+                      <textarea name="requirement" placeholder="Customer requirement..." rows={2} value={formData.requirement} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                     </div>
                   </div>
 
                   {/* RIGHT COLUMN */}
                   <div className="space-y-4">
 
-                    {/* Follow-ups */}
+                    {/* Follow-ups (Unlimited) */}
                     <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-semibold text-xs text-gray-800 flex items-center gap-1.5">
                           <div className="w-1 h-1 rounded-full bg-indigo-500"></div>
-                          Follow-ups ({formData.followups.length}/5)
+                          Follow-ups ({formData.followups.length})
                         </h3>
-                        <button type="button" onClick={addFollowup} disabled={formData.followups.length >= 5} className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded text-[10px] font-medium">
+                        <button type="button" onClick={addFollowup} className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-medium transition-colors duration-200">
                           + Add
                         </button>
                       </div>
@@ -1688,22 +1720,22 @@ export default function LeadsPage() {
                         <div className="space-y-2 max-h-[240px] overflow-y-auto">
                           {formData.followups.map((followup, index) => (
                             <div key={index} className="bg-white border rounded p-2 relative">
-                              <button type="button" onClick={() => removeFollowup(index)} className="absolute top-1.5 right-1.5 text-red-500 hover:text-red-700">
+                              <button type="button" onClick={() => removeFollowup(index)} className="absolute top-1.5 right-1.5 text-red-500 hover:text-red-700 transition-colors duration-200">
                                 <X size={12} />
                               </button>
                               <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                                 <div>
                                   <label className="block text-[9px] font-medium text-gray-600 mb-0.5">Date</label>
-                                  <input type="date" value={followup.date} onChange={(e) => updateFollowup(index, 'date', e.target.value)} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800" />
+                                  <input type="date" value={followup.date} onChange={(e) => updateFollowup(index, 'date', e.target.value)} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800 transition-all duration-200 focus:ring-1 focus:ring-indigo-300" />
                                 </div>
                                 <div>
                                   <label className="block text-[9px] font-medium text-gray-600 mb-0.5">Done By</label>
-                                  <input type="text" placeholder="Name" value={followup.done_by} onChange={(e) => updateFollowup(index, 'done_by', e.target.value)} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800" />
+                                  <input type="text" placeholder="Name" value={followup.done_by} onChange={(e) => updateFollowup(index, 'done_by', e.target.value)} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800 transition-all duration-200 focus:ring-1 focus:ring-indigo-300" />
                                 </div>
                               </div>
                               <div>
                                 <label className="block text-[9px] font-medium text-gray-600 mb-0.5">Discussion</label>
-                                <textarea placeholder="Summary..." value={followup.discussion} onChange={(e) => updateFollowup(index, 'discussion', e.target.value)} rows={2} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800" />
+                                <textarea placeholder="Summary..." value={followup.discussion} onChange={(e) => updateFollowup(index, 'discussion', e.target.value)} rows={2} className="w-full px-1.5 py-1 border rounded text-[10px] text-gray-800 transition-all duration-200 focus:ring-1 focus:ring-indigo-300" />
                               </div>
                             </div>
                           ))}
@@ -1720,10 +1752,10 @@ export default function LeadsPage() {
                       <div className="space-y-2">
                         <div>
                           <label className="block text-[10px] font-medium text-gray-600 mb-1">Status</label>
-                          <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white">
+                          <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
                             <option value="Only Inquiry">Only Inquiry</option>
                             <option value="Quote Shared">Quote Shared</option>
-                            <option value="DI Shared">DI Shared</option>
+                            <option value="PI Shared">PI Shared</option>
                             <option value="Converted">Converted</option>
                             <option value="Lost">Lost</option>
                             <option value="Wanted">Wanted</option>
@@ -1731,8 +1763,8 @@ export default function LeadsPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-gray-600 mb-1">Notes</label>
-                          <textarea name="notes" placeholder="Notes..." rows={3} value={formData.notes} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white" />
+                          <label className="block text-[10px] font-medium text-gray-600 mb-1">Additional Notes</label>
+                          <textarea name="notes" placeholder="Additional notes..." rows={3} value={formData.notes} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                         </div>
                       </div>
                     </div>
@@ -1741,10 +1773,10 @@ export default function LeadsPage() {
 
                 {/* Footer */}
                 <div className="flex gap-2 mt-5 pt-3 border-t border-gray-200">
-                  <button type="submit" className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow-md">
+                  <button type="submit" className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow-md transition-all duration-200">
                     {editingLead ? 'Update Lead' : 'Add Lead'}
                   </button>
-                  <button type="button" onClick={() => { setShowModal(false); setEditingLead(null); }} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2.5 rounded-lg text-sm font-medium">
+                  <button type="button" onClick={() => { setShowModal(false); setEditingLead(null); }} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200">
                     Cancel
                   </button>
                 </div>
