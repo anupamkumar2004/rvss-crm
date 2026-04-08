@@ -89,7 +89,7 @@ export default function LoginPage() {
               <Shield size={32} className="text-white" />
             </div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h1>
-            <p className="text-slate-600">Novas Library Management System</p>
+            <p className="text-slate-600">Rvss Crm Portal</p>
             <p className="text-sm text-slate-500 mt-1">Business Portal Login</p>
           </div>
 

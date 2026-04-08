@@ -117,6 +117,13 @@ export default function LeadsPage() {
   const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<number[]>([]);
 
+  // Master data for dropdowns
+  const [customerCategories, setCustomerCategories] = useState<{ id: number; name: string }[]>([]);
+  const [sources, setSources] = useState<{ id: number; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
+  const [statuses, setStatuses] = useState<{ id: number; name: string }[]>([]);
+  const [interests, setInterests] = useState<{ id: number; name: string }[]>([]);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -145,7 +152,7 @@ export default function LeadsPage() {
     customer_category: 'Uncategorized',
     phone: '',
     location: '',
-    source: 'India Mart',
+    source: 'IndiaMart',
     source_reference: '',
     product: 'Attendance',
     product_name: '',
@@ -287,6 +294,23 @@ export default function LeadsPage() {
   };
 
   useEffect(() => {
+    const fetchMasterData = async () => {
+      const supabase = createClient();
+      const [catRes, srcRes, prodRes, statRes, intRes] = await Promise.all([
+        supabase.from('customer_categories').select('id,name').order('name'),
+        supabase.from('sources').select('id,name').order('name'),
+        supabase.from('products').select('id,name').order('name'),
+        supabase.from('statuses').select('id,name').order('name'),
+        supabase.from('interests').select('id,name').order('name'),
+      ]);
+      if (catRes.data) setCustomerCategories(catRes.data);
+      if (srcRes.data) setSources(srcRes.data);
+      if (prodRes.data) setProducts(prodRes.data);
+      if (statRes.data) setStatuses(statRes.data);
+      if (intRes.data) setInterests(intRes.data);
+    };
+
+    fetchMasterData();
     fetchLeads();
     autoCleanupOldDeleted();
   }, []);
@@ -695,7 +719,7 @@ export default function LeadsPage() {
         customer_category: 'Uncategorized',
         phone: '',
         location: '',
-        source: 'India Mart',
+        source: 'IndiaMart',
         source_reference: '',
         product: 'Attendance',
         product_name: '',
@@ -958,7 +982,7 @@ export default function LeadsPage() {
                   customer_category: 'Uncategorized',
                   phone: '',
                   location: '',
-                  source: 'India Mart',
+                  source: 'IndiaMart',
                   source_reference: '',
                   product: 'Attendance',
                   product_name: '',
@@ -1063,7 +1087,7 @@ export default function LeadsPage() {
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                   >
                     <option value="">All Sources</option>
-                    {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
+                    {sources.map(src => <option key={src.id} value={src.name}>{src.name}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 min-w-[120px]">
@@ -1072,7 +1096,7 @@ export default function LeadsPage() {
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                   >
                     <option value="">All Products</option>
-                    {uniqueProducts.map(p => <option key={p} value={p}>{p}</option>)}
+                    {products.map(prod => <option key={prod.id} value={prod.name}>{prod.name}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 min-w-[120px]">
@@ -1081,10 +1105,7 @@ export default function LeadsPage() {
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                   >
                     <option value="">All Interest</option>
-                    <option value="Very High">Very High</option>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                    {interests.map(int => <option key={int.id} value={int.name}>{int.name}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 min-w-[120px]">
@@ -1093,13 +1114,7 @@ export default function LeadsPage() {
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                   >
                     <option value="">All Status</option>
-                    <option value="Only Inquiry">Only Inquiry</option>
-                    <option value="Quote Shared">Quote Shared</option>
-                    <option value="PI Shared">PI Shared</option>
-                    <option value="Converted">Converted</option>
-                    <option value="Lost">Lost</option>
-                    <option value="Wanted">Wanted</option>
-                    <option value="Postponed">Postponed</option>
+                    {statuses.map(stat => <option key={stat.id} value={stat.name}>{stat.name}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 min-w-[120px]">
@@ -1108,7 +1123,7 @@ export default function LeadsPage() {
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}
                   >
                     <option value="">All Categories</option>
-                    {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    {customerCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
                   </select>
                 </div>
                 <div className="flex-1 min-w-[120px]">
@@ -1203,13 +1218,13 @@ export default function LeadsPage() {
                               <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-medium inline-block truncate max-w-full whitespace-nowrap">
                                 {lead.source}
                               </span>
-                            </td>
+                             </td>
 
                             {/* Product */}
                             <td className="px-2 py-2">
                               <div className="font-medium text-gray-900 truncate leading-tight">{lead.product}</div>
                               {lead.product_name && <div className="text-[10px] text-gray-500 truncate">{lead.product_name}</div>}
-                            </td>
+                             </td>
 
                             {/* Interest - Inline Editable */}
                             <td className="px-2 py-2">
@@ -1219,12 +1234,11 @@ export default function LeadsPage() {
                                 className={`w-full px-1.5 py-0.5 rounded text-[10px] font-semibold border-0 cursor-pointer transition-all duration-200 focus:ring-1 focus:ring-indigo-400 ${getInterestBadge(lead.interest)}`}
                                 style={{ appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '0.75rem' }}
                               >
-                                <option value="Very High">Very High</option>
-                                <option value="High">High</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Low">Low</option>
+                                {interests.map(int => (
+                                  <option key={int.id} value={int.name}>{int.name}</option>
+                                ))}
                               </select>
-                            </td>
+                             </td>
 
                             {/* Follow-ups */}
                             <td className="px-2 py-2">
@@ -1239,7 +1253,7 @@ export default function LeadsPage() {
                               ) : (
                                 <span className="text-[10px] text-gray-400 italic whitespace-nowrap">None</span>
                               )}
-                            </td>
+                             </td>
 
                             {/* Additional Notes */}
                             <td className="px-2 py-2">
@@ -1258,7 +1272,7 @@ export default function LeadsPage() {
                               ) : (
                                 <span className="text-[10px] text-gray-400 italic">None</span>
                               )}
-                            </td>
+                             </td>
 
                             {/* Status - Inline Editable */}
                             <td className="px-2 py-2">
@@ -1268,15 +1282,11 @@ export default function LeadsPage() {
                                 className={`w-full px-1.5 py-0.5 rounded text-[10px] font-semibold border-0 cursor-pointer transition-all duration-200 focus:ring-1 focus:ring-indigo-400 ${getStatusColor(lead.status)}`}
                                 style={{ appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '0.75rem' }}
                               >
-                                <option value="Only Inquiry">Only Inquiry</option>
-                                <option value="Quote Shared">Quote Shared</option>
-                                <option value="PI Shared">PI Shared</option>
-                                <option value="Converted">Converted</option>
-                                <option value="Lost">Lost</option>
-                                <option value="Wanted">Wanted</option>
-                                <option value="Postponed">Postponed</option>
+                                {statuses.map(stat => (
+                                  <option key={stat.id} value={stat.name}>{stat.name}</option>
+                                ))}
                               </select>
-                            </td>
+                             </td>
 
                             {/* Actions */}
                             <td className="px-2 py-2">
@@ -1288,12 +1298,12 @@ export default function LeadsPage() {
                                   <Trash2 size={13} />
                                 </button>
                               </div>
-                            </td>
-                          </tr>
+                             </td>
+                           </tr>
                         ))
                       )}
                     </tbody>
-                  </table>
+                   </table>
                 </div>
 
                 {/* Pagination Controls */}
@@ -1323,8 +1333,8 @@ export default function LeadsPage() {
                       onClick={goToFirstPage}
                       disabled={currentPage === 1}
                       className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === 1
-                          ? "text-gray-400 cursor-not-allowed bg-gray-100"
-                          : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                        ? "text-gray-400 cursor-not-allowed bg-gray-100"
+                        : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
                         }`}
                     >
                       First
@@ -1334,8 +1344,8 @@ export default function LeadsPage() {
                       onClick={goToPrevPage}
                       disabled={currentPage === 1}
                       className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === 1
-                          ? "text-gray-400 cursor-not-allowed bg-gray-100"
-                          : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                        ? "text-gray-400 cursor-not-allowed bg-gray-100"
+                        : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
                         }`}
                     >
                       &lt; Prev
@@ -1347,10 +1357,10 @@ export default function LeadsPage() {
                         onClick={() => typeof page === 'number' ? goToPage(page) : null}
                         disabled={page === '...'}
                         className={`px-3 py-1.5 text-xs font-medium rounded transition-all duration-200 ${page === currentPage
-                            ? "bg-indigo-600 text-white border border-indigo-600"
-                            : page === '...'
-                              ? "text-gray-400 cursor-default bg-white"
-                              : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                          ? "bg-indigo-600 text-white border border-indigo-600"
+                          : page === '...'
+                            ? "text-gray-400 cursor-default bg-white"
+                            : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
                           }`}
                       >
                         {page}
@@ -1361,8 +1371,8 @@ export default function LeadsPage() {
                       onClick={goToNextPage}
                       disabled={currentPage === totalPages}
                       className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === totalPages
-                          ? "text-gray-400 cursor-not-allowed bg-gray-100"
-                          : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                        ? "text-gray-400 cursor-not-allowed bg-gray-100"
+                        : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
                         }`}
                     >
                       Next &gt;
@@ -1372,8 +1382,8 @@ export default function LeadsPage() {
                       onClick={goToLastPage}
                       disabled={currentPage === totalPages}
                       className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all duration-200 ${currentPage === totalPages
-                          ? "text-gray-400 cursor-not-allowed bg-gray-100"
-                          : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                        ? "text-gray-400 cursor-not-allowed bg-gray-100"
+                        : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
                         }`}
                     >
                       Last
@@ -1447,7 +1457,7 @@ export default function LeadsPage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                   </table>
                 </div>
               )}
             </div>
@@ -1625,13 +1635,9 @@ export default function LeadsPage() {
                         <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                         <input type="tel" name="phone" placeholder="Phone *" required value={formData.phone} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                         <select name="customer_category" value={formData.customer_category} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
-                          <option value="Office">Office</option>
-                          <option value="Industry">Industry</option>
-                          <option value="Education">Education</option>
-                          <option value="Gym">Gym</option>
-                          <option value="Hospital">Hospital</option>
-                          <option value="Residence">Residence</option>
-                          <option value="Uncategorized">Uncategorized</option>
+                          {customerCategories.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
                         </select>
                         <input type="text" name="location" placeholder="Address *" required value={formData.location} onChange={handleInputChange} className="col-span-2 px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                       </div>
@@ -1645,13 +1651,9 @@ export default function LeadsPage() {
                       </h3>
                       <div className="grid grid-cols-2 gap-2">
                         <select name="source" value={formData.source} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
-                          <option value="India Mart">India Mart</option>
-                          <option value="YouTube">YouTube</option>
-                          <option value="GMB">GMB</option>
-                          <option value="ESSL">ESSL</option>
-                          <option value="Website">Website</option>
-                          <option value="Unknown">Unknown</option>
-                          <option value="Reference">Reference</option>
+                          {sources.map(src => (
+                            <option key={src.id} value={src.name}>{src.name}</option>
+                          ))}
                         </select>
                         {formData.source === 'Reference' && (
                           <select name="source_reference" value={formData.source_reference} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
@@ -1661,10 +1663,9 @@ export default function LeadsPage() {
                           </select>
                         )}
                         <select name="interest" value={formData.interest} onChange={handleInputChange} className={`px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none ${formData.source === 'Reference' ? '' : 'col-span-2'}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
-                          <option value="Very High">Very High</option>
-                          <option value="High">High</option>
-                          <option value="Medium">Medium</option>
-                          <option value="Low">Low</option>
+                          {interests.map(int => (
+                            <option key={int.id} value={int.name}>{int.name}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -1677,13 +1678,9 @@ export default function LeadsPage() {
                       </h3>
                       <div className="grid grid-cols-3 gap-2">
                         <select name="product" value={formData.product} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
-                          <option value="Attendance">Attendance</option>
-                          <option value="Access">Access</option>
-                          <option value="CCTV">CCTV</option>
-                          <option value="Metal Detector">Metal Detector</option>
-                          <option value="Automation">Automation</option>
-                          <option value="Software">Software</option>
-                          <option value="Service">Service</option>
+                          {products.map(prod => (
+                            <option key={prod.id} value={prod.name}>{prod.name}</option>
+                          ))}
                         </select>
                         <input type="text" name="product_name" placeholder="Product Name" value={formData.product_name} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
                         <input type="text" name="quantity" placeholder="Qty" value={formData.quantity} onChange={handleInputChange} className="px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500" />
@@ -1753,13 +1750,9 @@ export default function LeadsPage() {
                         <div>
                           <label className="block text-[10px] font-medium text-gray-600 mb-1">Status</label>
                           <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-2.5 py-2 border rounded text-xs text-gray-800 bg-white transition-all duration-200 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1rem' }}>
-                            <option value="Only Inquiry">Only Inquiry</option>
-                            <option value="Quote Shared">Quote Shared</option>
-                            <option value="PI Shared">PI Shared</option>
-                            <option value="Converted">Converted</option>
-                            <option value="Lost">Lost</option>
-                            <option value="Wanted">Wanted</option>
-                            <option value="Postponed">Postponed</option>
+                            {statuses.map(stat => (
+                              <option key={stat.id} value={stat.name}>{stat.name}</option>
+                            ))}
                           </select>
                         </div>
                         <div>

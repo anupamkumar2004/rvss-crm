@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 
 // ============================================
-// INTERFACES - UPDATED WITH CUSTOM STATUS/ISSUE
+// INTERFACES - UPDATED WITH NEW ACCESSORY
 // ============================================
 
 interface Service {
@@ -55,23 +55,23 @@ interface Service {
   has_rfid_card: boolean;
   has_original_box: boolean;
   has_mounting_plate: boolean;
+  has_metal_enclosure: boolean; // NEW
 
   accessories_missing: boolean;
-  missing_accessories_details: string | null; // Can be null
+  missing_accessories_details: string | null;
   issue_type: string;
-  detailed_remarks: string | null; // Can be null
+  detailed_remarks: string | null;
   status: string;
-  expected_delivery_date: string | null; // Can be null
-  delivered_date: string | null; // Can be null
-  delivered_to: string | null; // Can be null
-  final_remarks: string | null; // Can be null
+  delivered_date: string | null;
+  delivered_to: string | null;
+  final_remarks: string | null;
   last_updated: string;
   deleted: boolean;
   deleted_at: string | null;
   created_at?: string;
 }
-interface FormData {
 
+interface FormData {
   customer_name: string;
   phone: string;
   date_received: string;
@@ -88,18 +88,18 @@ interface FormData {
   has_rfid_card: boolean;
   has_original_box: boolean;
   has_mounting_plate: boolean;
+  has_metal_enclosure: boolean; // NEW
 
   accessories_missing: boolean;
-  missing_accessories_details: string; // Not optional
+  missing_accessories_details: string;
   issue_type: string;
-  detailed_remarks: string; // Not optional
+  detailed_remarks: string;
   status: string;
-  expected_delivery_date: string; // Not optional
-  delivered_date: string; // Not optional
-  delivered_to: string; // Not optional
-  final_remarks: string; // Not optional
-
+  delivered_date: string;
+  delivered_to: string;
+  final_remarks: string;
 }
+
 interface Filters {
   status: string;
   accessories_missing: string;
@@ -116,7 +116,7 @@ interface Toast {
 }
 
 // ============================================
-// MAIN COMPONENT - AMC STYLE UI
+// MAIN COMPONENT - UPDATED THEME & REMOVED EXPECTED DATE
 // ============================================
 
 export default function ServiceDevicePage() {
@@ -130,7 +130,6 @@ export default function ServiceDevicePage() {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedNotes, setSelectedNotes] = useState('');
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -165,7 +164,7 @@ export default function ServiceDevicePage() {
 
   const [services, setServices] = useState<Service[]>([]);
 
-  // UPDATED FORM DATA WITH NEW ACCESSORIES
+  // UPDATED FORM DATA WITH NEW ACCESSORY & REMOVED EXPECTED DATE
   const [formData, setFormData] = useState<FormData>({
     customer_name: '',
     phone: '',
@@ -183,13 +182,13 @@ export default function ServiceDevicePage() {
     has_rfid_card: false,
     has_original_box: false,
     has_mounting_plate: false,
+    has_metal_enclosure: false, // NEW
 
     accessories_missing: false,
     missing_accessories_details: '',
     issue_type: 'Not Working',
     detailed_remarks: '',
     status: 'Received',
-    expected_delivery_date: '',
     delivered_date: '',
     delivered_to: '',
     final_remarks: ''
@@ -274,7 +273,6 @@ export default function ServiceDevicePage() {
     try {
       setLoading(true);
 
-      // Get logged-in user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
       if (userError || !user) {
@@ -284,7 +282,6 @@ export default function ServiceDevicePage() {
         return;
       }
 
-      // Fetch ACTIVE Services
       const { data: activeData, error: activeError } = await supabase
         .from('service_devices')
         .select('*')
@@ -296,7 +293,6 @@ export default function ServiceDevicePage() {
 
       setServices(activeData || []);
 
-      // Fetch TRASHED Services (last 7 days only)
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -320,7 +316,6 @@ export default function ServiceDevicePage() {
     }
   };
 
-  // AUTO DELETE records older than 7 days (PERMANENT DELETE)
   const autoDeleteOldRecords = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -329,7 +324,6 @@ export default function ServiceDevicePage() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      // PERMANENT DELETE records marked as deleted and older than 7 days
       const { error } = await supabase
         .from('service_devices')
         .delete()
@@ -346,22 +340,8 @@ export default function ServiceDevicePage() {
   };
 
   // ============================================
-  // ACCESSORIES COUNT FUNCTION
+  // ACCESSORIES COUNT FUNCTION (UPDATED)
   // ============================================
-
-  const countAccessories = (service: Service) => {
-    const accessories = [
-      service.has_adapter,
-      service.has_power_connector,
-      service.has_access_connector,
-      service.has_rfid_card,
-      service.has_original_box,
-      service.has_mounting_plate,
-    ];
-    const presentCount = accessories.filter(Boolean).length;
-    const total = accessories.length;
-    return { present: presentCount, total, percentage: Math.round((presentCount / total) * 100) };
-  };
 
   const countAllAccessories = (item: Service | FormData) => {
     const accessories = [
@@ -372,13 +352,15 @@ export default function ServiceDevicePage() {
       item.has_rfid_card,
       item.has_original_box,
       item.has_mounting_plate,
+      item.has_metal_enclosure,
     ];
     const presentCount = accessories.filter(Boolean).length;
     const total = accessories.length;
-    return { present: presentCount, total, percentage: Math.round((presentCount / total) * 100) };
+    return { present: presentCount, total };
   };
+
   // ============================================
-  // EXPORT FUNCTIONS
+  // EXPORT FUNCTIONS (UPDATED WITH NEW ACCESSORY)
   // ============================================
 
   const handleExportExcel = () => {
@@ -401,14 +383,14 @@ export default function ServiceDevicePage() {
         'RFID Card': service.has_rfid_card ? 'Yes' : 'No',
         'Original Box': service.has_original_box ? 'Yes' : 'No',
         'Mounting Plate': service.has_mounting_plate ? 'Yes' : 'No',
-        'Accessories Count': `${countAccessories(service).present}/${countAccessories(service).total}`,
+        'Metal Enclosure': service.has_metal_enclosure ? 'Yes' : 'No',
+        'Accessories Count': `${countAllAccessories(service).present}/${countAllAccessories(service).total}`,
 
         'Accessories Missing': service.accessories_missing ? 'Yes' : 'No',
         'Missing Details': service.missing_accessories_details || '',
         'Issue Type': service.issue_type,
         'Detailed Remarks': service.detailed_remarks || '',
         'Status': service.status,
-        'Expected Delivery': service.expected_delivery_date || '',
         'Delivered Date': service.delivered_date || '',
         'Delivered To': service.delivered_to || '',
         'Final Remarks': service.final_remarks || '',
@@ -436,7 +418,7 @@ export default function ServiceDevicePage() {
         'Device': service.device_name,
         'Serial': service.serial_number,
         'Type': service.device_type,
-        'Accessories': `${countAccessories(service).present}/${countAccessories(service).total}`,
+        'Accessories': `${countAllAccessories(service).present}/${countAllAccessories(service).total}`,
         'Status': service.status,
         'Deleted At': service.deleted_at || ''
       }));
@@ -455,7 +437,7 @@ export default function ServiceDevicePage() {
   };
 
   // ============================================
-  // IMPORT FUNCTIONS
+  // IMPORT FUNCTIONS (UPDATED WITH NEW ACCESSORY)
   // ============================================
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -510,13 +492,13 @@ export default function ServiceDevicePage() {
               has_rfid_card: normalized['rfid_card'] === 'Yes',
               has_original_box: normalized['original_box'] === 'Yes',
               has_mounting_plate: normalized['mounting_plate'] === 'Yes',
+              has_metal_enclosure: normalized['metal_enclosure'] === 'Yes',
 
               accessories_missing: normalized['accessories_missing'] === 'Yes',
               missing_accessories_details: normalized['missing_details'] || '',
               issue_type: normalized['issue_type'] || 'Not Working',
               detailed_remarks: normalized['detailed_remarks'] || '',
               status: normalized['status'] || 'Received',
-              expected_delivery_date: normalized['expected_delivery'] || null,
               delivered_date: normalized['delivered_date'] || null,
               delivered_to: normalized['delivered_to'] || null,
               final_remarks: normalized['final_remarks'] || null,
@@ -605,7 +587,6 @@ export default function ServiceDevicePage() {
         return;
       }
 
-      // Add custom status and issue type to arrays if they don't exist
       if (formData.status && !customStatuses.includes(formData.status)) {
         setCustomStatuses(prev => [...prev, formData.status]);
       }
@@ -632,13 +613,13 @@ export default function ServiceDevicePage() {
         has_rfid_card: formData.has_rfid_card,
         has_original_box: formData.has_original_box,
         has_mounting_plate: formData.has_mounting_plate,
+        has_metal_enclosure: formData.has_metal_enclosure,
 
         accessories_missing: formData.accessories_missing,
         missing_accessories_details: formData.missing_accessories_details?.trim() || null,
         issue_type: formData.issue_type,
         detailed_remarks: formData.detailed_remarks?.trim() || null,
         status: formData.status,
-        expected_delivery_date: formData.expected_delivery_date || null,
         delivered_date: formData.delivered_date || null,
         delivered_to: formData.delivered_to?.trim() || null,
         final_remarks: formData.final_remarks?.trim() || null,
@@ -682,12 +663,12 @@ export default function ServiceDevicePage() {
       has_rfid_card: false,
       has_original_box: false,
       has_mounting_plate: false,
+      has_metal_enclosure: false,
       accessories_missing: false,
       missing_accessories_details: '',
       issue_type: 'Not Working',
       detailed_remarks: '',
       status: 'Received',
-      expected_delivery_date: '',
       delivered_date: '',
       delivered_to: '',
       final_remarks: ''
@@ -711,20 +692,19 @@ export default function ServiceDevicePage() {
       has_rfid_card: service.has_rfid_card,
       has_original_box: service.has_original_box,
       has_mounting_plate: service.has_mounting_plate,
+      has_metal_enclosure: service.has_metal_enclosure,
       accessories_missing: service.accessories_missing,
-      missing_accessories_details: service.missing_accessories_details || '', // FIX HERE
+      missing_accessories_details: service.missing_accessories_details || '',
       issue_type: service.issue_type,
-      detailed_remarks: service.detailed_remarks || '', // FIX HERE
+      detailed_remarks: service.detailed_remarks || '',
       status: service.status,
-      expected_delivery_date: service.expected_delivery_date || '', // FIX HERE
-      delivered_date: service.delivered_date || '', // FIX HERE
-      delivered_to: service.delivered_to || '', // FIX HERE
-      final_remarks: service.final_remarks || '' // FIX HERE
+      delivered_date: service.delivered_date || '',
+      delivered_to: service.delivered_to || '',
+      final_remarks: service.final_remarks || ''
     });
     setShowModal(true);
   };
 
-  // SOFT DELETE - Mark as deleted for 7 days before auto-deletion
   const handleDelete = async (id: number) => {
     showConfirm('Delete this service record? (Will be permanently removed in 7 days)', async () => {
       try {
@@ -746,7 +726,6 @@ export default function ServiceDevicePage() {
     });
   };
 
-  // RESTORE FROM TRASH
   const handleRestore = async (id: number) => {
     showConfirm('Restore this service record from trash?', async () => {
       try {
@@ -865,12 +844,12 @@ export default function ServiceDevicePage() {
   };
 
   // ============================================
-  // STYLING FUNCTIONS
+  // STYLING FUNCTIONS (UPDATED COLOR)
   // ============================================
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      'Received': 'bg-blue-50 text-blue-700 border border-blue-200',
+      'Received': 'bg-indigo-50 text-indigo-700 border border-indigo-200',
       'Under Checking': 'bg-purple-50 text-purple-700 border border-purple-200',
       'In Repair': 'bg-orange-50 text-orange-700 border border-orange-200',
       'Ready for Delivery': 'bg-green-50 text-green-700 border border-green-200',
@@ -890,69 +869,48 @@ export default function ServiceDevicePage() {
   // ============================================
   // FILTERING AND CALCULATIONS
   // ============================================
-const toYMD = (date: string): string => {
-  return new Date(date).toISOString().split('T')[0];
-};
 
-  // Filter active Services
-const filteredServices = services.filter(service => {
-  const matchesSearch =
-    service.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.phone.includes(searchTerm) ||
-    service.device_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.serial_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.received_by.toLowerCase().includes(searchTerm.toLowerCase());
+  const toYMD = (date: string): string => {
+    return new Date(date).toISOString().split('T')[0];
+  };
 
-  if (!matchesSearch) return false;
-  if (filters.status && service.status !== filters.status) return false;
-  if (filters.accessories_missing === 'Yes' && !service.accessories_missing) return false;
-  if (filters.customer_name && !service.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
-  if (filters.device_type && service.device_type !== filters.device_type) return false;
+  const filteredServices = services.filter(service => {
+    const matchesSearch =
+      service.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.phone.includes(searchTerm) ||
+      service.device_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.serial_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.received_by.toLowerCase().includes(searchTerm.toLowerCase());
 
-  // ✅ FIXED DATE FILTER
-  if (filters.date_from) {
-    const serviceDate = toYMD(service.date_received);
-    if (serviceDate !== filters.date_from) return false;
-  }
+    if (!matchesSearch) return false;
+    if (filters.status && service.status !== filters.status) return false;
+    if (filters.accessories_missing === 'Yes' && !service.accessories_missing) return false;
+    if (filters.customer_name && !service.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
+    if (filters.device_type && service.device_type !== filters.device_type) return false;
+    if (filters.date_from) {
+      const serviceDate = toYMD(service.date_received);
+      if (serviceDate !== filters.date_from) return false;
+    }
+    return true;
+  });
 
-  return true;
-});
-
-
-  // Filter trashed Services
   const filteredTrashServices = trashedServices.filter(service => {
-  // SEARCH
-  const matchesSearch =
-    service.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.phone.includes(searchTerm) ||
-    service.device_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.serial_number.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      service.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.phone.includes(searchTerm) ||
+      service.device_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.serial_number.toLowerCase().includes(searchTerm.toLowerCase());
 
-  if (!matchesSearch) return false;
+    if (!matchesSearch) return false;
+    if (filters.customer_name && !service.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
+    if (filters.device_type && service.device_type !== filters.device_type) return false;
+    if (filters.date_from) {
+      const serviceDate = toYMD(service.date_received);
+      if (serviceDate !== filters.date_from) return false;
+    }
+    return true;
+  });
 
-  // CUSTOMER NAME FILTER
-  if (
-    filters.customer_name &&
-    !service.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())
-  ) {
-    return false;
-  }
-
-  // DEVICE TYPE FILTER
-  if (filters.device_type && service.device_type !== filters.device_type) {
-    return false;
-  }
-
-  // ✅ EXACT DATE FILTER (TRASH)
-  if (filters.date_from) {
-    const serviceDate = toYMD(service.date_received);
-    if (serviceDate !== filters.date_from) return false;
-  }
-
-  return true;
-});
-
-  // Calculate stats
   const totalServices = services.length;
   const inRepair = services.filter(s => s.status === 'In Repair' || s.status === 'Under Checking').length;
   const readyForDelivery = services.filter(s => s.status === 'Ready for Delivery').length;
@@ -1035,7 +993,7 @@ const filteredServices = services.filter(service => {
               key={number}
               onClick={() => setCurrentPage(number)}
               className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${currentPage === number
-                ? 'bg-red-600 text-white border-red-600'
+                ? 'bg-indigo-600 text-white border-indigo-600'
                 : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
                 }`}
             >
@@ -1084,7 +1042,7 @@ const filteredServices = services.filter(service => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading service records...</p>
         </div>
       </div>
@@ -1127,8 +1085,8 @@ const filteredServices = services.filter(service => {
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full pointer-events-auto">
               <div className="p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                    <AlertCircle className="text-red-600" size={24} />
+                  <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <AlertCircle className="text-indigo-600" size={24} />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900">Confirm Action</h3>
                 </div>
@@ -1136,7 +1094,7 @@ const filteredServices = services.filter(service => {
                 <div className="flex gap-3">
                   <button
                     onClick={handleConfirm}
-                    className="flex-1 bg-gradient-to-r from-red-600 to-red-600 hover:from-red-700 hover:to-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
                   >
                     Confirm
                   </button>
@@ -1159,7 +1117,7 @@ const filteredServices = services.filter(service => {
           <div className="fixed inset-0 bg-black/30 z-[90]" onClick={() => setShowNotesModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] pointer-events-none">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full pointer-events-auto">
-              <div className="bg-gradient-to-r from-red-600 to-red-600 text-white p-4 rounded-t-xl flex items-center justify-between">
+              <div className="bg-gradient-to-r from-indigo-600 to-indigo-600 text-white p-4 rounded-t-xl flex items-center justify-between">
                 <h3 className="text-xl font-bold">📝 Details</h3>
                 <button onClick={() => setShowNotesModal(false)} className="text-white hover:text-gray-200">
                   <X size={24} />
@@ -1179,7 +1137,7 @@ const filteredServices = services.filter(service => {
           <div className="fixed inset-0 bg-black/30 z-[90]" onClick={() => setShowModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] pointer-events-none">
             <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-600 text-white p-4 rounded-t-xl flex items-center justify-between">
+              <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-indigo-600 text-white p-4 rounded-t-xl flex items-center justify-between">
                 <h3 className="text-xl font-bold">{editingService ? 'Edit Service Record' : 'Receive New Device'}</h3>
                 <button onClick={() => setShowModal(false)} className="text-white hover:text-gray-200">
                   <X size={24} />
@@ -1189,7 +1147,7 @@ const filteredServices = services.filter(service => {
                 {/* Customer & Entry Info */}
                 <div>
                   <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center">1</span>
+                    <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">1</span>
                     Customer & Entry Information
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1200,10 +1158,7 @@ const filteredServices = services.filter(service => {
                         name="customer_name"
                         value={formData.customer_name}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded 
-                              text-gray-900 
-                              focus:ring-2 focus:ring-red-500 focus:border-red-500 
-                              placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Enter customer name"
                         required
                       />
@@ -1215,7 +1170,7 @@ const filteredServices = services.filter(service => {
                         name="phone"
                         value={formData.phone}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 text-gray-900 focus:border-red-500 placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-gray-900 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Enter phone number"
                         required
                       />
@@ -1227,7 +1182,7 @@ const filteredServices = services.filter(service => {
                         name="date_received"
                         value={formData.date_received}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-gray-900  text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-base"
                         required
                       />
                     </div>
@@ -1238,7 +1193,7 @@ const filteredServices = services.filter(service => {
                         name="received_by"
                         value={formData.received_by}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900  focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Staff name"
                         required
                       />
@@ -1249,7 +1204,7 @@ const filteredServices = services.filter(service => {
                 {/* Device Details */}
                 <div>
                   <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center">2</span>
+                    <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">2</span>
                     Device Details
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1260,7 +1215,7 @@ const filteredServices = services.filter(service => {
                         name="device_name"
                         value={formData.device_name}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900  focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Enter device name/model"
                         required
                       />
@@ -1272,7 +1227,7 @@ const filteredServices = services.filter(service => {
                         name="serial_number"
                         value={formData.serial_number}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900  focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Enter serial number"
                         required
                       />
@@ -1283,7 +1238,7 @@ const filteredServices = services.filter(service => {
                         name="device_type"
                         value={formData.device_type}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900  focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-base"
                       >
                         <option value="Biometric">Biometric Device</option>
                         <option value="CCTV">CCTV Camera</option>
@@ -1295,40 +1250,12 @@ const filteredServices = services.filter(service => {
                   </div>
                 </div>
 
-                {/* ACCESSORIES CHECKLIST - UPDATED */}
-                <div className="border-2 border-red-200 rounded-lg p-5 bg-red-50">
-                  <h3 className="font-semibold text-sm text-red-700 mb-4 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-red-200 text-red-700 rounded-full flex items-center justify-center">3</span>
-                    Accessories with Device Checklist <span className="text-red-600 font-bold">(VERY IMPORTANT)</span>
+                {/* ACCESSORIES CHECKLIST - UPDATED WITH METAL ENCLOSURE & NO PERCENTAGE */}
+                <div className="border-2 border-indigo-200 rounded-lg p-5 bg-indigo-50">
+                  <h3 className="font-semibold text-sm text-indigo-700 mb-4 flex items-center gap-2">
+                    <span className="w-6 h-6 bg-indigo-200 text-indigo-700 rounded-full flex items-center justify-center">3</span>
+                    Accessories with Device Checklist <span className="text-indigo-600 font-bold">(VERY IMPORTANT)</span>
                   </h3>
-
-                  {/* Accessories Count Display */}
-                  <div className="mb-4 p-3 bg-white rounded-lg border border-red-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium text-gray-900">Accessories Status:</span>
-                        <span className="ml-2 text-sm text-green-900 font-medium">
-                          {(() => {
-                            const allCount = countAllAccessories(formData);
-                            return `${allCount.present}/${allCount.total} accessories`;
-                          })()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getAccessoryCountColor(countAllAccessories(formData).present, countAllAccessories(formData).total)}`}>
-                          <Percent size={14} className="inline mr-1" />
-                          {countAllAccessories(formData).percentage}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="flex items-center gap-2 text-sm font-semibold text-red-700 cursor-pointer">
-
-                      <span>⚠️ ACCESSORIES (What accessories we received with the device)</span>
-                    </label>
-                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                     <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors">
@@ -1337,7 +1264,7 @@ const filteredServices = services.filter(service => {
                         name="has_device"
                         checked={formData.has_device}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Main Device</span>
@@ -1351,7 +1278,7 @@ const filteredServices = services.filter(service => {
                         name="has_adapter"
                         checked={formData.has_adapter}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Adapter / Power Supply</span>
@@ -1365,7 +1292,7 @@ const filteredServices = services.filter(service => {
                         name="has_power_connector"
                         checked={formData.has_power_connector}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Power Connector</span>
@@ -1379,7 +1306,7 @@ const filteredServices = services.filter(service => {
                         name="has_access_connector"
                         checked={formData.has_access_connector}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Access Connector</span>
@@ -1393,7 +1320,7 @@ const filteredServices = services.filter(service => {
                         name="has_rfid_card"
                         checked={formData.has_rfid_card}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">RFID Card</span>
@@ -1407,7 +1334,7 @@ const filteredServices = services.filter(service => {
                         name="has_original_box"
                         checked={formData.has_original_box}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Original Box</span>
@@ -1415,30 +1342,45 @@ const filteredServices = services.filter(service => {
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors md:col-span-2 lg:col-span-1">
+                    <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors">
                       <input
                         type="checkbox"
                         name="has_mounting_plate"
                         checked={formData.has_mounting_plate}
                         onChange={handleInputChange}
-                        className="w-5 h-5 text-red-600 focus:ring-red-500 rounded"
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                       />
                       <div>
                         <span className="font-medium text-gray-900 text-base">Mounting Plate</span>
                         <p className="text-xs text-gray-500">Brackets/mounting hardware</p>
                       </div>
                     </label>
+
+                    {/* NEW METAL ENCLOSURE */}
+                    <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        name="has_metal_enclosure"
+                        checked={formData.has_metal_enclosure}
+                        onChange={handleInputChange}
+                        className="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                      />
+                      <div>
+                        <span className="font-medium text-gray-900 text-base">Metal Enclosure</span>
+                        <p className="text-xs text-gray-500">Protective metal casing</p>
+                      </div>
+                    </label>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-red-700 mb-2">Missing/Additional Accessories Details</label>
+                    <label className="block text-sm font-medium text-indigo-700 mb-2">Missing/Additional Accessories Details</label>
                     <textarea
                       name="missing_accessories_details"
                       placeholder="Specify exactly which items are missing/available and their condition..."
                       value={formData.missing_accessories_details}
                       onChange={handleInputChange}
                       rows={3}
-                      className="w-full px-3 py-2 border border-red-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-red-300 bg-white resize-none text-base"
+                      className="w-full px-3 py-2 border border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-indigo-300 bg-white resize-none text-base"
                     />
                   </div>
                 </div>
@@ -1446,7 +1388,7 @@ const filteredServices = services.filter(service => {
                 {/* Issue Details with Custom Option */}
                 <div>
                   <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center">4</span>
+                    <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">4</span>
                     Issue Details
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1457,14 +1399,13 @@ const filteredServices = services.filter(service => {
                           name="issue_type"
                           value={formData.issue_type}
                           onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-base"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-base"
                         >
                           <option value="">Select issue type</option>
                           {customIssueTypes.map((type) => (
                             <option key={type} value={type}>{type}</option>
                           ))}
                         </select>
-
                       </div>
                     </div>
                     <div>
@@ -1474,14 +1415,13 @@ const filteredServices = services.filter(service => {
                           name="status"
                           value={formData.status}
                           onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-base"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-base"
                         >
                           <option value="">Select status</option>
                           {customStatuses.map((status) => (
                             <option key={status} value={status}>{status}</option>
                           ))}
                         </select>
-
                       </div>
                     </div>
                     <div className="md:col-span-2">
@@ -1492,29 +1432,19 @@ const filteredServices = services.filter(service => {
                         value={formData.detailed_remarks}
                         onChange={handleInputChange}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 text-gray-900  rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 bg-white resize-none text-base"
+                        className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 bg-white resize-none text-base"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Timeline */}
+                {/* Service Timeline - EXPECTED DATE REMOVED */}
                 <div>
                   <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center">5</span>
+                    <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">5</span>
                     Service Timeline
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date</label>
-                      <input
-                        type="date"
-                        name="expected_delivery_date"
-                        value={formData.expected_delivery_date}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 text-gray-900  rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-base"
-                      />
-                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Delivered Date</label>
                       <input
@@ -1522,7 +1452,7 @@ const filteredServices = services.filter(service => {
                         name="delivered_date"
                         value={formData.delivered_date}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-700 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-base"
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -1532,7 +1462,7 @@ const filteredServices = services.filter(service => {
                         name="delivered_to"
                         value={formData.delivered_to}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900  focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 text-base"
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 text-base"
                         placeholder="Person who received the device"
                       />
                     </div>
@@ -1544,7 +1474,7 @@ const filteredServices = services.filter(service => {
                         value={formData.final_remarks}
                         onChange={handleInputChange}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 text-gray-900  rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder-gray-500 bg-white resize-none text-base"
+                        className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 bg-white resize-none text-base"
                       />
                     </div>
                   </div>
@@ -1561,7 +1491,7 @@ const filteredServices = services.filter(service => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-red-600 hover:from-red-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-md"
+                    className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all shadow-md"
                   >
                     {editingService ? 'Update Service Record' : 'Receive Device'}
                   </button>
@@ -1582,7 +1512,7 @@ const filteredServices = services.filter(service => {
               {showTrash ? '🗑️ Service Trash' : '🔧 Service Center Management'}
             </h2>
             {showTrash && (
-              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">
+              <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
                 {trashedServices.length} items in trash (Auto-deletes in 7 days)
               </span>
             )}
@@ -1596,7 +1526,7 @@ const filteredServices = services.filter(service => {
                   setEditingService(null);
                   resetFormData();
                 }}
-                className="bg-gradient-to-r from-red-600 to-red-600 hover:from-red-700 hover:to-red-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-1.5 text-sm"
+                className="bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-1.5 text-sm"
               >
                 <Plus size={16} />
                 <span>Receive Device</span>
@@ -1670,7 +1600,7 @@ const filteredServices = services.filter(service => {
                     placeholder={`Search ${showTrash ? 'trash' : 'services'}...`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-800"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
                   />
                 </div>
               </div>
@@ -1679,13 +1609,7 @@ const filteredServices = services.filter(service => {
               <div className="flex gap-2 flex-wrap flex-1">
                 {!showTrash ? (
                   <>
-                    <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                      <Filter size={18} />
-                      <span>Filter</span>
-                    </button>
+                    {/* Filter button removed - filters always visible */}
 
                     <button
                       onClick={handleExportExcel}
@@ -1747,7 +1671,7 @@ const filteredServices = services.filter(service => {
                 {/* Trash Toggle Button */}
                 <button
                   onClick={() => setShowTrash(!showTrash)}
-                  className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium flex items-center gap-2 ml-auto"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2 ml-auto"
                 >
                   {showTrash ? (
                     <>
@@ -1763,10 +1687,8 @@ const filteredServices = services.filter(service => {
                 </button>
               </div>
             </div>
-          </div>
 
-          {/* Filter Section (Only show when not in trash) */}
-          {showFilters && !showTrash && (
+            {/* Filter Section - Always Visible (no toggle) */}
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 <select
@@ -1780,18 +1702,6 @@ const filteredServices = services.filter(service => {
                     <option key={status} value={status}>{status}</option>
                   ))}
                 </select>
-                {false && (
-                  <select
-                    name="accessories_missing"
-                    value={filters.accessories_missing}
-                    onChange={handleFilterChange}
-                    className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
-                  >
-                    <option value="">All Accessories</option>
-                    <option value="Yes">Accessories Missing</option>
-                  </select>
-                )}
-
                 <select
                   name="device_type"
                   value={filters.device_type}
@@ -1805,7 +1715,6 @@ const filteredServices = services.filter(service => {
                   <option value="Access Control">Access Control</option>
                   <option value="Other">Other</option>
                 </select>
-               
                 <input
                   type="date"
                   name="date_from"
@@ -1813,7 +1722,6 @@ const filteredServices = services.filter(service => {
                   onChange={handleFilterChange}
                   className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white"
                 />
-                
                 <button
                   onClick={clearFilters}
                   className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium"
@@ -1822,7 +1730,7 @@ const filteredServices = services.filter(service => {
                 </button>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Bulk Action Bar */}
           {selectedServices.length > 0 && (
@@ -1854,7 +1762,7 @@ const filteredServices = services.filter(service => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gradient-to-r from-red-600 to-red-600 text-white">
+                <thead className="bg-gradient-to-r from-indigo-600 to-indigo-600 text-white">
                   <tr>
                     <th className="p-2 text-left font-semibold whitespace-nowrap">
                       <input
@@ -1867,11 +1775,11 @@ const filteredServices = services.filter(service => {
                     <th className="p-2 text-left font-semibold whitespace-nowrap">S.No</th>
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Customer</th>
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Device</th>
-                    <th className="p-2 text-left font-semibold whitespace-nowrap">Accessories with Device</th> 
+                    {/* Accessories column removed */}
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Issue</th>
                     {!showTrash && <th className="p-2 text-left font-semibold whitespace-nowrap">Status</th>}
                     <th className="p-2 text-left font-semibold whitespace-nowrap">Dates</th>
-                    <th className="p-2 text-left font-semibold whitespace-nowrap">Remarks</th> 
+                    <th className="p-2 text-left font-semibold whitespace-nowrap">Remarks</th>
                     {showTrash && <th className="p-2 text-left font-semibold whitespace-nowrap">Deleted On</th>}
                     <th className="p-2 text-center font-semibold whitespace-nowrap">Actions</th>
                   </tr>
@@ -1879,7 +1787,7 @@ const filteredServices = services.filter(service => {
                 <tbody>
                   {currentRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={showTrash ? 11 : 10} className="p-8 text-center text-gray-500">
+                      <td colSpan={showTrash ? 10 : 9} className="p-8 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <AlertCircle size={32} className="text-gray-400" />
                           <p className="text-sm">
@@ -1892,137 +1800,112 @@ const filteredServices = services.filter(service => {
                       </td>
                     </tr>
                   ) : (
-                    currentRecords.map((service, index) => {
-                      const accessoriesCount = countAccessories(service);
-                      const allAccessoriesCount = countAllAccessories(service);
-
-                      return (
-                        <tr key={service.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="p-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedServices.includes(service.id)}
-                              onChange={() => toggleServiceSelection(service.id)}
-                              className="w-4 h-4 rounded cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-2 text-gray-600 whitespace-nowrap font-medium">
-                            {indexOfFirstItem + index + 1}
-                          </td>
+                    currentRecords.map((service, index) => (
+                      <tr key={service.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="p-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedServices.includes(service.id)}
+                            onChange={() => toggleServiceSelection(service.id)}
+                            className="w-4 h-4 rounded cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-2 text-gray-600 whitespace-nowrap font-medium">
+                          {indexOfFirstItem + index + 1}
+                        </td>
+                        <td className="p-2 whitespace-nowrap">
+                          <div className="font-semibold text-gray-900 text-base">{service.customer_name}</div>
+                          <div className="text-sm text-gray-600 font-medium">{service.phone}</div>
+                          <div className="text-xs text-gray-500">Received by: {service.received_by}</div>
+                        </td>
+                        <td className="p-2 whitespace-nowrap">
+                          <div className="font-semibold text-gray-900 text-base">{service.device_name}</div>
+                          <div className="text-sm text-gray-600">{service.device_type}</div>
+                          <div className="text-xs text-gray-400 font-mono">SN: {service.serial_number}</div>
+                        </td>
+                        {/* Accessories cell removed */}
+                        <td className="p-2 whitespace-nowrap">
+                          <span className="px-3 py-1 rounded text-sm font-medium bg-orange-100 text-orange-700">
+                            {service.issue_type}
+                          </span>
+                        </td>
+                        {!showTrash && (
                           <td className="p-2 whitespace-nowrap">
-                            <div className="font-semibold text-gray-900 text-base">{service.customer_name}</div> {/* Increased font size */}
-                            <div className="text-sm text-gray-600 font-medium">{service.phone}</div> {/* Increased font size */}
-                            <div className="text-xs text-gray-500">Received by: {service.received_by}</div>
-                          </td>
-                          <td className="p-2 whitespace-nowrap">
-                            <div className="font-semibold text-gray-900 text-base">{service.device_name}</div> {/* Increased font size */}
-                            <div className="text-sm text-gray-600">{service.device_type}</div> {/* Increased font size */}
-                            <div className="text-xs text-gray-400 font-mono">SN: {service.serial_number}</div>
-                          </td>
-                          <td className="p-2 whitespace-nowrap">
-                            <div className={`px-3 py-1.5 rounded-lg flex flex-col items-center ${getAccessoryCountColor(accessoriesCount.present, accessoriesCount.total)}`}>
-                              <div className="flex items-center gap-2">
-                                <Hash size={14} />
-                                <span className="font-bold text-lg">{allAccessoriesCount.present}/{allAccessoriesCount.total}</span>
-                              </div>
-                              <div className="text-xs mt-1 opacity-80 hidden">accessories</div>
-                              {service.accessories_missing && (
-                                <div className="text-xs mt-1 text-red-600 flex items-center gap-1 hidden">
-                                  <AlertTriangle size={10} />
-                                  <span>Incomplete</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-2 whitespace-nowrap">
-                            <span className="px-3 py-1 rounded text-sm font-medium bg-orange-100 text-orange-700">
-                              {service.issue_type}
+                            <span className={`px-3 py-1.5 rounded text-sm font-medium ${getStatusColor(service.status)}`}>
+                              {service.status}
                             </span>
                           </td>
-                          {!showTrash && (
-                            <td className="p-2 whitespace-nowrap">
-                              <span className={`px-3 py-1.5 rounded text-sm font-medium ${getStatusColor(service.status)}`}>
-                                {service.status}
-                              </span>
-                            </td>
+                        )}
+                        <td className="p-2 whitespace-nowrap">
+                          <div className="text-sm">
+                            <div className="font-medium text-gray-900">Received: {formatDateToDisplay(service.date_received)}</div>
+                            {service.delivered_date && (
+                              <div className="text-green-600 mt-1 font-medium">Delivered: {formatDateToDisplay(service.delivered_date)}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2 whitespace-nowrap max-w-xs">
+                          {service.detailed_remarks ? (
+                            <button
+                              onClick={() => showNotes(service.detailed_remarks)}
+                              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors text-sm font-medium"
+                            >
+                              <MessageSquare size={14} />
+                              <span>View Remarks</span>
+                            </button>
+                          ) : (
+                            <span className="text-gray-400 text-sm">No remarks</span>
                           )}
+                          {service.final_remarks && (
+                            <div className="mt-1">
+                              <button
+                                onClick={() => showNotes(service.final_remarks)}
+                                className="text-xs text-green-600 hover:text-green-800 underline"
+                              >
+                                View Final Notes
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                        {showTrash && (
                           <td className="p-2 whitespace-nowrap">
-                            <div className="text-sm">
-                              <div className="font-medium text-gray-900">Received: {formatDateToDisplay(service.date_received)}</div>
-                              {service.expected_delivery_date && (
-                                <div className="text-orange-600 mt-1">Expected: {formatDateToDisplay(service.expected_delivery_date)}</div>
-                              )}
-                              {service.delivered_date && (
-                                <div className="text-green-600 mt-1 font-medium">Delivered: {formatDateToDisplay(service.delivered_date)}</div>
-                              )}
+                            <div className="text-sm text-gray-500">
+                              {formatDateTime(service.deleted_at)}
                             </div>
                           </td>
-                          {/* NEW REMARKS COLUMN */}
-                          <td className="p-2 whitespace-nowrap max-w-xs">
-                            {service.detailed_remarks ? (
+                        )}
+                        <td className="p-2 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1">
+                            {showTrash ? (
                               <button
-                                onClick={() => showNotes(service.detailed_remarks)}
-                                className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors text-sm font-medium"
+                                onClick={() => handleRestore(service.id)}
+                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                title="Restore"
                               >
-                                <MessageSquare size={14} />
-                                <span>View Remarks</span>
+                                <Undo2 size={16} />
                               </button>
                             ) : (
-                              <span className="text-gray-400 text-sm">No remarks</span>
-                            )}
-                            {service.final_remarks && (
-                              <div className="mt-1">
+                              <>
                                 <button
-                                  onClick={() => showNotes(service.final_remarks)}
-                                  className="text-xs text-green-600 hover:text-green-800 underline"
+                                  onClick={() => handleEdit(service)}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit"
                                 >
-                                  View Final Notes
+                                  <Edit2 size={16} />
                                 </button>
-                              </div>
-                            )}
-                          </td>
-                          {showTrash && (
-                            <td className="p-2 whitespace-nowrap">
-                              <div className="text-sm text-gray-500">
-                                {formatDateTime(service.deleted_at)}
-                              </div>
-                            </td>
-                          )}
-                          <td className="p-2 whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
-                              {showTrash ? (
-                                // TRASH SECTION - ONLY RESTORE BUTTON (NO DELETE)
                                 <button
-                                  onClick={() => handleRestore(service.id)}
-                                  className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                  title="Restore"
+                                  onClick={() => handleDelete(service.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete"
                                 >
-                                  <Undo2 size={16} /> {/* Increased icon size */}
+                                  <Trash2 size={16} />
                                 </button>
-                              ) : (
-                                // ACTIVE SECTION - EDIT AND DELETE
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(service)}
-                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                    title="Edit"
-                                  >
-                                    <Edit2 size={16} /> {/* Increased icon size */}
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(service.id)}
-                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={16} /> {/* Increased icon size */}
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
