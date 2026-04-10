@@ -424,8 +424,8 @@ export default function PricingPage() {
       }
 
       // Determine final brand
-      const finalBrand = formData.brand === 'Custom' && formData.customBrand.trim() 
-        ? formData.customBrand.trim() 
+      const finalBrand = formData.brand === 'Custom' && formData.customBrand.trim()
+        ? formData.customBrand.trim()
         : formData.brand;
 
       if (formData.brand === 'Custom' && !formData.customBrand.trim()) {
@@ -598,7 +598,7 @@ export default function PricingPage() {
     // General search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         product.product_name.toLowerCase().includes(query) ||
         product.model_number.toLowerCase().includes(query) ||
         product.brand.toLowerCase().includes(query) ||
@@ -698,11 +698,10 @@ export default function PricingPage() {
             <button
               key={number}
               onClick={() => setCurrentPage(number)}
-              className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${
-                currentPage === number
+              className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${currentPage === number
                   ? 'bg-teal-600 text-white border-teal-600'
                   : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               {number}
             </button>
@@ -772,11 +771,10 @@ export default function PricingPage() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] ${
-              toast.type === 'success' ? 'bg-green-500 text-white' :
-              toast.type === 'error' ? 'bg-red-500 text-white' :
-              toast.type === 'warning' ? 'bg-yellow-500 text-white' : 'bg-blue-500 text-white'
-            }`}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] ${toast.type === 'success' ? 'bg-green-500 text-white' :
+                toast.type === 'error' ? 'bg-red-500 text-white' :
+                  toast.type === 'warning' ? 'bg-yellow-500 text-white' : 'bg-blue-500 text-white'
+              }`}
           >
             {toast.type === 'success' && <CheckCircle size={20} />}
             {toast.type === 'error' && <AlertCircle size={20} />}
@@ -896,9 +894,8 @@ export default function PricingPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 <button
                   onClick={() => setSelectedBrand('All')}
-                  className={`p-3 rounded-xl border-2 transition-all ${
-                    selectedBrand === 'All' ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 bg-white hover:border-teal-300'
-                  }`}
+                  className={`p-3 rounded-xl border-2 transition-all ${selectedBrand === 'All' ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 bg-white hover:border-teal-300'
+                    }`}
                 >
                   <div className="text-2xl mb-1">🏢</div>
                   <div className="text-xs font-semibold text-gray-700">All</div>
@@ -908,9 +905,8 @@ export default function PricingPage() {
                   <button
                     key={brand.name}
                     onClick={() => setSelectedBrand(brand.name)}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      selectedBrand === brand.name ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 bg-white hover:border-teal-300'
-                    }`}
+                    className={`p-3 rounded-xl border-2 transition-all ${selectedBrand === brand.name ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 bg-white hover:border-teal-300'
+                      }`}
                   >
                     <div className="text-2xl mb-1">{brand.emoji}</div>
                     <div className="text-xs font-semibold text-gray-700 truncate">{brand.name}</div>
@@ -1210,49 +1206,75 @@ export default function PricingPage() {
               {renderPagination()}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 bg-red-50 border-b border-red-200">
+            <div className="bg-white rounded-xl shadow-md border border-gray-300 overflow-hidden">
+
+              {/* Header */}
+              <div className="p-4 bg-red-100 border-b border-red-300">
                 <div className="flex items-center gap-3">
                   <Trash className="text-red-600" size={24} />
                   <div>
                     <h3 className="text-lg font-bold text-red-800">🗑️ Trash Bin</h3>
-                    <p className="text-sm text-red-600">⚠️ Auto-deletes after 7 days</p>
+                    <p className="text-sm text-red-700">⚠️ Auto-deletes after 7 days</p>
                   </div>
                 </div>
               </div>
+
+              {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-100">
+                <table className="w-full text-sm">
+
+                  {/* Table Head */}
+                  <thead className="bg-red-50 text-red-800 border-b border-red-200">
                     <tr>
-                      <th className="p-2 text-left font-semibold">Brand</th>
-                      <th className="p-2 text-left font-semibold">Category</th>
-                      <th className="p-2 text-left font-semibold">Model</th>
-                      <th className="p-2 text-left font-semibold">Price</th>
-                      <th className="p-2 text-left font-semibold">Deleted Date</th>
-                      <th className="p-2 text-center font-semibold">Action</th>
+                      <th className="p-3 text-left font-semibold">Brand</th>
+                      <th className="p-3 text-left font-semibold">Category</th>
+                      <th className="p-3 text-left font-semibold">Model</th>
+                      <th className="p-3 text-left font-semibold">Price</th>
+                      <th className="p-3 text-left font-semibold">Deleted Date</th>
+                      <th className="p-3 text-center font-semibold">Action</th>
                     </tr>
                   </thead>
+
+                  {/* Table Body */}
                   <tbody>
                     {trashedProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-gray-500">
+                        <td colSpan={6} className="p-10 text-center text-gray-500">
                           <p className="text-sm">Trash is empty</p>
                         </td>
                       </tr>
                     ) : (
                       trashedProducts.map(product => (
-                        <tr key={product.id} className="border-b border-gray-100">
-                          <td className="p-2 font-medium text-gray-900">{product.brand}</td>
-                          <td className="p-2 text-gray-600">{product.category}</td>
-                          <td className="p-2 text-gray-600">{product.model_number}</td>
-                          <td className="p-2 text-gray-600">₹{product.selling_price.toLocaleString()}</td>
-                          <td className="p-2 text-gray-600">
-                            {product.deleted_at ? new Date(product.deleted_at).toLocaleDateString() : '-'}
+                        <tr
+                          key={product.id}
+                          className="border-b border-gray-200 hover:bg-red-50 transition-colors"
+                        >
+                          <td className="p-3 font-medium text-gray-900">
+                            {product.brand}
                           </td>
-                          <td className="p-2 text-center">
+
+                          <td className="p-3 text-gray-800">
+                            {product.category}
+                          </td>
+
+                          <td className="p-3 text-gray-800 font-medium">
+                            {product.model_number}
+                          </td>
+
+                          <td className="p-3 text-gray-900 font-semibold">
+                            ₹{product.selling_price.toLocaleString()}
+                          </td>
+
+                          <td className="p-3 text-gray-700">
+                            {product.deleted_at
+                              ? new Date(product.deleted_at).toLocaleDateString()
+                              : '-'}
+                          </td>
+
+                          <td className="p-3 text-center">
                             <button
                               onClick={() => handleRestore(product.id)}
-                              className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium inline-flex items-center gap-1"
+                              className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-md text-xs font-medium inline-flex items-center gap-1 transition"
                             >
                               <RefreshCw size={12} />
                               Restore

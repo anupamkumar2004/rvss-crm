@@ -15,17 +15,12 @@ interface Payment {
   user_id?: string;
   customer_name: string;
   phone: string;
-  invoice_number: string;
   payment_date: string;
-  total_amount: number;
-  paid_amount: number;
-  due_amount: number;
-  payment_mode: 'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Card';
-  transaction_id: string;
-  category: 'Installation' | 'AMC' | 'Retail' | 'Service';
-  related_to: string;
+  type_of_work: string;
+  amount: number;
+  bill_no: string;
+  status: 'Paid' | 'Partially Paid' | 'Pending';
   notes: string;
-  status: 'Received' | 'Pending' | 'Partial';
   last_updated: string;
   deleted: boolean;
   deleted_at: string | null;
@@ -35,22 +30,17 @@ interface Payment {
 interface FormData {
   customer_name: string;
   phone: string;
-  invoice_number: string;
   payment_date: string;
-  total_amount: string;
-  paid_amount: string;
-  payment_mode: 'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Card';
-  transaction_id: string;
-  category: 'Installation' | 'AMC' | 'Retail' | 'Service';
-  related_to: string;
+  type_of_work: string;
+  amount: string;
+  bill_no: string;
+  status: 'Paid' | 'Partially Paid' | 'Pending';
   notes: string;
-  status: 'Received' | 'Pending' | 'Partial';
 }
 
 interface Filters {
   status: string;
-  category: string;
-  payment_mode: string;
+  type_of_work: string;
   date_from: string;
   date_to: string;
 }
@@ -74,7 +64,6 @@ export default function PaymentsPage() {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedNotes, setSelectedNotes] = useState('');
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -83,14 +72,13 @@ export default function PaymentsPage() {
   const [selectedPayments, setSelectedPayments] = useState<number[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<number[]>([]);
 
-  // PAGINATION STATES
+  // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20); // Show 20 items per page
+  const [itemsPerPage] = useState(20);
 
   const [filters, setFilters] = useState<Filters>({
     status: '',
-    category: '',
-    payment_mode: '',
+    type_of_work: '',
     date_from: '',
     date_to: ''
   });
@@ -101,19 +89,15 @@ export default function PaymentsPage() {
   const [formData, setFormData] = useState<FormData>({
     customer_name: '',
     phone: '',
-    invoice_number: '',
     payment_date: '',
-    total_amount: '',
-    paid_amount: '',
-    payment_mode: 'Cash',
-    transaction_id: '',
-    category: 'Installation',
-    related_to: '',
-    notes: '',
-    status: 'Received'
+    type_of_work: '',
+    amount: '',
+    bill_no: '',
+    status: 'Pending',
+    notes: ''
   });
 
-  // Fix hydration issue
+  // Fix hydration
   useEffect(() => {
     setMounted(true);
     setFormData(prev => ({
@@ -123,7 +107,7 @@ export default function PaymentsPage() {
   }, []);
 
   // ============================================
-  // UTILITY FUNCTIONS
+  // UTILITIES
   // ============================================
 
   const formatDateToDisplay = (dateString: string): string => {
@@ -168,7 +152,6 @@ export default function PaymentsPage() {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) {
         router.push('/login');
         return;
@@ -196,23 +179,8 @@ export default function PaymentsPage() {
 
       if (trashedError) throw trashedError;
 
-      // Auto-migrate old records without new columns
-      const migratedActive = (activeData || []).map(payment => ({
-        ...payment,
-        total_amount: payment.total_amount ?? payment.amount ?? 0,
-        paid_amount: payment.paid_amount ?? (payment.status === 'Received' ? (payment.amount ?? 0) : 0),
-        due_amount: payment.due_amount ?? (payment.status === 'Received' ? 0 : (payment.amount ?? 0))
-      }));
-
-      const migratedTrashed = (trashedData || []).map(payment => ({
-        ...payment,
-        total_amount: payment.total_amount ?? payment.amount ?? 0,
-        paid_amount: payment.paid_amount ?? (payment.status === 'Received' ? (payment.amount ?? 0) : 0),
-        due_amount: payment.due_amount ?? (payment.status === 'Received' ? 0 : (payment.amount ?? 0))
-      }));
-
-      setPayments(migratedActive);
-      setTrashedPayments(migratedTrashed);
+      setPayments(activeData || []);
+      setTrashedPayments(trashedData || []);
     } catch (error) {
       console.error('Error:', error);
       showToast('Failed to fetch payments', 'error');
@@ -225,10 +193,8 @@ export default function PaymentsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
       await supabase
         .from('payments')
         .delete()
@@ -241,7 +207,7 @@ export default function PaymentsPage() {
   };
 
   // ============================================
-  // EXPORT FUNCTIONS
+  // EXPORT / IMPORT
   // ============================================
 
   const handleExportExcel = () => {
@@ -249,16 +215,11 @@ export default function PaymentsPage() {
       const dataToExport = payments.map((payment, index) => ({
         'S.No': index + 1,
         'Customer Name': payment.customer_name,
-        'Phone': payment.phone,
-        'Invoice Number': payment.invoice_number || '',
-        'Payment Date': formatDateToDisplay(payment.payment_date),
-        'Total Amount': payment.total_amount || 0,
-        'Paid Amount': payment.paid_amount || 0,
-        'Due Amount': payment.due_amount || 0,
-        'Payment Mode': payment.payment_mode,
-        'Transaction ID': payment.transaction_id || '',
-        'Category': payment.category,
-        'Related To': payment.related_to || '',
+        'Phone': payment.phone || '',
+        'Date': formatDateToDisplay(payment.payment_date),
+        'Type of Work': payment.type_of_work,
+        'Amount': payment.amount,
+        'Bill No.': payment.bill_no || '',
         'Status': payment.status,
         'Notes': payment.notes || ''
       }));
@@ -266,9 +227,9 @@ export default function PaymentsPage() {
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Payments');
-      worksheet['!cols'] = Array(13).fill({ wch: 15 });
+      worksheet['!cols'] = Array(9).fill({ wch: 15 });
       XLSX.writeFile(workbook, `Payments_${new Date().toISOString().split('T')[0]}.xlsx`);
-      showToast(`Exported ${payments.length} payment records`, 'success');
+      showToast(`Exported ${payments.length} records`, 'success');
     } catch (error) {
       showToast('Export failed', 'error');
     }
@@ -279,17 +240,14 @@ export default function PaymentsPage() {
       const dataToExport = payments.map((payment, index) => ({
         'S.No': index + 1,
         'Customer': payment.customer_name,
-        'Phone': payment.phone,
-        'Invoice': payment.invoice_number || '',
+        'Phone': payment.phone || '',
         'Date': formatDateToDisplay(payment.payment_date),
-        'Total': payment.total_amount || 0,
-        'Paid': payment.paid_amount || 0,
-        'Due': payment.due_amount || 0,
-        'Mode': payment.payment_mode,
-        'Category': payment.category,
-        'Status': payment.status
+        'Work': payment.type_of_work,
+        'Amount': payment.amount,
+        'Bill': payment.bill_no || '',
+        'Status': payment.status,
+        'Notes': payment.notes || ''
       }));
-
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const csv = XLSX.utils.sheet_to_csv(worksheet);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -302,10 +260,6 @@ export default function PaymentsPage() {
       showToast('Export failed', 'error');
     }
   };
-
-  // ============================================
-  // IMPORT FUNCTIONS
-  // ============================================
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -339,38 +293,26 @@ export default function PaymentsPage() {
               normalized[key.toLowerCase().trim().replace(/\s+/g, '_')] = row[key];
             });
 
-            const totalAmount = parseFloat(normalized['total_amount'] || normalized['total'] || '0');
-            const paidAmount = parseFloat(normalized['paid_amount'] || normalized['paid'] || '0');
-            const dueAmount = totalAmount - paidAmount;
-
-            let status: 'Received' | 'Pending' | 'Partial' = 'Received';
-            if (paidAmount === 0) status = 'Pending';
-            else if (paidAmount < totalAmount) status = 'Partial';
+            let status: 'Paid' | 'Partially Paid' | 'Pending' = 'Pending';
+            const statusStr = normalized['status']?.toLowerCase() || '';
+            if (statusStr === 'paid') status = 'Paid';
+            else if (statusStr === 'partially paid' || statusStr === 'partial') status = 'Partially Paid';
 
             return {
               user_id: user.id,
               customer_name: normalized['customer_name'] || normalized['customer'] || '',
-              phone: String(normalized['phone'] || ''),
-              invoice_number: normalized['invoice_number'] || normalized['invoice'] || '',
+              phone: normalized['phone'] ? String(normalized['phone']) : '',
               payment_date: normalized['payment_date'] || normalized['date'] || new Date().toISOString().split('T')[0],
-              total_amount: totalAmount,
-              paid_amount: paidAmount,
-              due_amount: dueAmount,
-              payment_mode: ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Card'].includes(normalized['payment_mode'] || normalized['mode'])
-                ? (normalized['payment_mode'] || normalized['mode'])
-                : 'Cash',
-              transaction_id: normalized['transaction_id'] || '',
-              category: ['Installation', 'AMC', 'Retail', 'Service'].includes(normalized['category'])
-                ? normalized['category']
-                : 'Installation',
-              related_to: normalized['related_to'] || '',
-              notes: normalized['notes'] || '',
+              type_of_work: normalized['type_of_work'] || normalized['work'] || '',
+              amount: parseFloat(normalized['amount']) || 0,
+              bill_no: normalized['bill_no'] || normalized['bill'] || '',
               status: status,
+              notes: normalized['notes'] || '',
               last_updated: new Date().toISOString().split('T')[0],
               deleted: false,
               deleted_at: null
             };
-          }).filter(payment => payment.customer_name && payment.phone);
+          }).filter(p => p.customer_name && p.type_of_work && p.amount > 0);
 
           if (paymentsToImport.length === 0) {
             showToast('No valid records found', 'warning');
@@ -407,7 +349,6 @@ export default function PaymentsPage() {
       showToast('No import to undo', 'warning');
       return;
     }
-
     showConfirm(`Delete ${lastImportedIds.length} imported records?`, async () => {
       try {
         const { error } = await supabase.from('payments').delete().in('id', lastImportedIds);
@@ -422,30 +363,12 @@ export default function PaymentsPage() {
   };
 
   // ============================================
-  // CRUD OPERATIONS
+  // CRUD
   // ============================================
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-
-      // Auto-calculate due amount and status
-      if (name === 'total_amount' || name === 'paid_amount') {
-        const total = parseFloat(name === 'total_amount' ? value : updated.total_amount) || 0;
-        const paid = parseFloat(name === 'paid_amount' ? value : updated.paid_amount) || 0;
-
-        if (paid === 0) {
-          updated.status = 'Pending';
-        } else if (paid < total) {
-          updated.status = 'Partial';
-        } else {
-          updated.status = 'Received';
-        }
-      }
-
-      return updated;
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -458,30 +381,21 @@ export default function PaymentsPage() {
         return;
       }
 
-      if (!formData.customer_name || !formData.phone || !formData.payment_date) {
+      if (!formData.customer_name || !formData.payment_date || !formData.type_of_work || !formData.amount) {
         showToast('Please fill all required fields', 'error');
         return;
       }
 
-      const totalAmount = parseFloat(formData.total_amount) || 0;
-      const paidAmount = parseFloat(formData.paid_amount) || 0;
-      const dueAmount = totalAmount - paidAmount;
-
       const paymentData = {
         user_id: user.id,
         customer_name: formData.customer_name.trim(),
-        phone: formData.phone.trim(),
-        invoice_number: formData.invoice_number?.trim() || null,
+        phone: formData.phone?.trim() || null,
         payment_date: formData.payment_date,
-        total_amount: totalAmount,
-        paid_amount: paidAmount,
-        due_amount: dueAmount,
-        payment_mode: formData.payment_mode,
-        transaction_id: formData.transaction_id?.trim() || null,
-        category: formData.category,
-        related_to: formData.related_to?.trim() || null,
-        notes: formData.notes?.trim() || null,
+        type_of_work: formData.type_of_work.trim(),
+        amount: parseFloat(formData.amount) || 0,
+        bill_no: formData.bill_no?.trim() || null,
         status: formData.status,
+        notes: formData.notes?.trim() || null,
         last_updated: new Date().toISOString().split('T')[0],
         deleted: false,
         deleted_at: null
@@ -503,16 +417,12 @@ export default function PaymentsPage() {
       setFormData({
         customer_name: '',
         phone: '',
-        invoice_number: '',
         payment_date: new Date().toISOString().split('T')[0],
-        total_amount: '',
-        paid_amount: '',
-        payment_mode: 'Cash',
-        transaction_id: '',
-        category: 'Installation',
-        related_to: '',
-        notes: '',
-        status: 'Received'
+        type_of_work: '',
+        amount: '',
+        bill_no: '',
+        status: 'Pending',
+        notes: ''
       });
     } catch (error: any) {
       showToast(`Save failed: ${error?.message || 'Unknown error'}`, 'error');
@@ -523,23 +433,19 @@ export default function PaymentsPage() {
     setEditingPayment(payment);
     setFormData({
       customer_name: payment.customer_name,
-      phone: payment.phone,
-      invoice_number: payment.invoice_number || '',
+      phone: payment.phone || '',
       payment_date: payment.payment_date,
-      total_amount: (payment.total_amount || 0).toString(),
-      paid_amount: (payment.paid_amount || 0).toString(),
-      payment_mode: payment.payment_mode,
-      transaction_id: payment.transaction_id,
-      category: payment.category,
-      related_to: payment.related_to,
-      notes: payment.notes,
-      status: payment.status
+      type_of_work: payment.type_of_work,
+      amount: payment.amount.toString(),
+      bill_no: payment.bill_no || '',
+      status: payment.status,
+      notes: payment.notes || ''
     });
     setShowModal(true);
   };
 
   const handleDelete = async (id: number) => {
-    showConfirm('Move to trash?', async () => {
+    showConfirm('Move to trash? (auto-delete after 7 days)', async () => {
       try {
         const { error } = await supabase.from('payments').update({ deleted: true, deleted_at: new Date().toISOString() }).eq('id', id);
         if (error) throw error;
@@ -565,7 +471,7 @@ export default function PaymentsPage() {
   };
 
   // ============================================
-  // BULK OPERATIONS
+  // BULK & SELECTION
   // ============================================
 
   const handleBulkDelete = async () => {
@@ -573,14 +479,12 @@ export default function PaymentsPage() {
       showToast('No records selected', 'warning');
       return;
     }
-
     showConfirm(`Move ${selectedPayments.length} records to trash?`, async () => {
       try {
         const { error } = await supabase
           .from('payments')
           .update({ deleted: true, deleted_at: new Date().toISOString() })
           .in('id', selectedPayments);
-
         if (error) throw error;
         await fetchPayments();
         setSelectedPayments([]);
@@ -592,19 +496,19 @@ export default function PaymentsPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedPayments.length === currentPayments.length) {
+    if (currentPayments.every(p => selectedPayments.includes(p.id))) {
       setSelectedPayments([]);
     } else {
-      setSelectedPayments(currentPayments.map(payment => payment.id));
+      setSelectedPayments(currentPayments.map(p => p.id));
     }
   };
 
   const togglePaymentSelection = (id: number) => {
-    setSelectedPayments(prev => prev.includes(id) ? prev.filter(paymentId => paymentId !== id) : [...prev, id]);
+    setSelectedPayments(prev => prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]);
   };
 
   // ============================================
-  // FILTER FUNCTIONS
+  // FILTERS
   // ============================================
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -613,7 +517,7 @@ export default function PaymentsPage() {
   };
 
   const clearFilters = () => {
-    setFilters({ status: '', category: '', payment_mode: '', date_from: '', date_to: '' });
+    setFilters({ status: '', type_of_work: '', date_from: '', date_to: '' });
     showToast('Filters cleared', 'info');
   };
 
@@ -623,921 +527,550 @@ export default function PaymentsPage() {
   };
 
   // ============================================
-  // STYLING FUNCTIONS
+  // STYLES
   // ============================================
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      'Received': 'bg-green-50 text-green-700 border border-green-200',
-      'Pending': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-      'Partial': 'bg-orange-50 text-orange-700 border border-orange-200'
+      'Paid': 'bg-green-50 text-green-700 border border-green-200',
+      'Partially Paid': 'bg-orange-50 text-orange-700 border border-orange-200',
+      'Pending': 'bg-yellow-50 text-yellow-700 border border-yellow-200'
     };
     return colors[status] || 'bg-gray-50 text-gray-700 border border-gray-200';
   };
 
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      'Installation': 'bg-blue-50 text-blue-700 border border-blue-200',
-      'AMC': 'bg-purple-50 text-purple-700 border border-purple-200',
-      'Retail': 'bg-pink-50 text-pink-700 border border-pink-200',
-      'Service': 'bg-orange-50 text-orange-700 border border-orange-200'
-    };
-    return colors[category] || 'bg-gray-50 text-gray-700 border border-gray-200';
-  };
-
   // ============================================
-  // FILTERING AND CALCULATIONS
+  // FILTERING & PAGINATION
   // ============================================
 
   const filteredPayments = payments.filter(payment => {
     const matchesSearch = payment.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.phone.includes(searchTerm) ||
-      payment.transaction_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.related_to?.toLowerCase().includes(searchTerm.toLowerCase());
+      (payment.phone && payment.phone.includes(searchTerm)) ||
+      payment.type_of_work.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (payment.bill_no && payment.bill_no.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (!matchesSearch) return false;
     if (filters.status && payment.status !== filters.status) return false;
-    if (filters.category && payment.category !== filters.category) return false;
-    if (filters.payment_mode && payment.payment_mode !== filters.payment_mode) return false;
+    if (filters.type_of_work && payment.type_of_work !== filters.type_of_work) return false;
     if (filters.date_from && payment.payment_date < filters.date_from) return false;
     if (filters.date_to && payment.payment_date > filters.date_to) return false;
     return true;
   });
-
-  // ============================================
-  // PAGINATION LOGIC
-  // ============================================
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentPayments = filteredPayments.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filters.status, filters.category, filters.payment_mode, filters.date_from, filters.date_to]);
+  }, [searchTerm, filters.status, filters.type_of_work, filters.date_from, filters.date_to]);
 
-  // Pagination component
   const renderPagination = () => {
     if (totalPages <= 1) return null;
-
     const pageNumbers = [];
     const maxVisiblePages = 5;
-
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
     if (endPage - startPage < maxVisiblePages - 1) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pageNumbers.push(i);
-    }
+    for (let i = startPage; i <= endPage; i++) pageNumbers.push(i);
 
     return (
       <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-white border-t border-gray-200 gap-3">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span>
-            Showing <span className="font-semibold">{indexOfFirstItem + 1}</span> to{' '}
-            <span className="font-semibold">{Math.min(indexOfLastItem, filteredPayments.length)}</span> of{' '}
-            <span className="font-semibold">{filteredPayments.length}</span> results
-          </span>
+        <div className="text-sm text-gray-600">
+          Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredPayments.length)} of {filteredPayments.length} results
         </div>
-
-        <div className="flex items-center gap-1 flex-wrap justify-center">
-          {/* First Page */}
-          <button
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            First
-          </button>
-
-          {/* Previous Page */}
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-          >
-            <ChevronLeft size={14} />
-            Prev
-          </button>
-
-          {/* Page Numbers */}
-          {startPage > 1 && (
-            <>
-              <button
-                onClick={() => setCurrentPage(1)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-              >
-                1
-              </button>
-              {startPage > 2 && <span className="px-2 text-gray-500">...</span>}
-            </>
-          )}
-
-          {pageNumbers.map(number => (
-            <button
-              key={number}
-              onClick={() => setCurrentPage(number)}
-              className={`px-3 py-1.5 text-xs font-medium rounded border transition-colors ${currentPage === number
-                ? 'bg-green-600 text-white border-green-600'
-                : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-                }`}
-            >
-              {number}
-            </button>
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-3 py-1.5 text-xs border rounded disabled:opacity-50">First</button>
+          <button onClick={() => setCurrentPage(prev => Math.max(1, prev-1))} disabled={currentPage === 1} className="px-2 py-1.5 text-xs border rounded flex items-center gap-1"><ChevronLeft size={14}/>Prev</button>
+          {startPage > 1 && <><button onClick={() => setCurrentPage(1)} className="px-3 py-1.5 text-xs border rounded">1</button>{startPage > 2 && <span className="px-2">...</span>}</>}
+          {pageNumbers.map(n => (
+            <button key={n} onClick={() => setCurrentPage(n)} className={`px-3 py-1.5 text-xs border rounded ${currentPage === n ? 'bg-green-600 text-white' : 'bg-white'}`}>{n}</button>
           ))}
-
-          {endPage < totalPages && (
-            <>
-              {endPage < totalPages - 1 && <span className="px-2 text-gray-500">...</span>}
-              <button
-                onClick={() => setCurrentPage(totalPages)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-              >
-                {totalPages}
-              </button>
-            </>
-          )}
-
-          {/* Next Page */}
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-            className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-          >
-            Next
-            <ChevronRight size={14} />
-          </button>
-
-          {/* Last Page */}
-          <button
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Last
-          </button>
+          {endPage < totalPages && <>{endPage < totalPages-1 && <span className="px-2">...</span>}<button onClick={() => setCurrentPage(totalPages)} className="px-3 py-1.5 text-xs border rounded">{totalPages}</button></>}
+          <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev+1))} disabled={currentPage === totalPages} className="px-2 py-1.5 text-xs border rounded flex items-center gap-1">Next<ChevronRight size={14}/></button>
+          <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-3 py-1.5 text-xs border rounded">Last</button>
         </div>
       </div>
     );
   };
 
-  const totalReceived = payments.filter(p => p.status === 'Received').reduce((sum, p) => sum + (p.paid_amount || 0), 0);
-  const totalPending = payments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + (p.due_amount || 0), 0);
-  const totalPartial = payments.filter(p => p.status === 'Partial').reduce((sum, p) => sum + (p.due_amount || 0), 0);
-  const totalAmount = payments.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+  // Stats
+  const totalAmount = filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const paidAmount = filteredPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+  const pendingAmount = filteredPayments.filter(p => p.status === 'Pending').reduce((sum, p) => sum + p.amount, 0);
+  const partialAmount = filteredPayments.filter(p => p.status === 'Partially Paid').reduce((sum, p) => sum + p.amount, 0);
 
-  const uniqueCategories = [...new Set(payments.map(p => p.category))];
-  const uniquePaymentModes = [...new Set(payments.map(p => p.payment_mode))];
+  const uniqueWorkTypes = [...new Set(payments.map(p => p.type_of_work))];
 
-  if (!mounted) {
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading payments...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!mounted) return null;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div><p className="mt-4 text-gray-600">Loading payments...</p></div>
+    </div>
+  );
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <h2 className="text-base lg:text-xl font-bold text-gray-800 truncate">
-              💳 Payment Records
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => {
-                setShowModal(true);
-                setEditingPayment(null);
-                setFormData({
-                  customer_name: '',
-                  phone: '',
-                  invoice_number: '',
-                  payment_date: new Date().toISOString().split('T')[0],
-                  total_amount: '',
-                  paid_amount: '',
-                  payment_mode: 'Cash',
-                  transaction_id: '',
-                  category: 'Installation',
-                  related_to: '',
-                  notes: '',
-                  status: 'Received'
-                });
-              }}
-              className="bg-gradient-to-r from-green-600 to-green-600 hover:from-green-700 hover:to-green-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-1.5 text-sm"
-            >
-              <Plus size={16} />
-              <span>Add Payment</span>
-            </button>
-          </div>
+        <header className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between sticky top-0 z-30">
+          <h2 className="text-base lg:text-xl font-bold text-gray-800 truncate">💳 Payment Records</h2>
+          <button onClick={() => { setShowModal(true); setEditingPayment(null); setFormData({ customer_name: '', phone: '', payment_date: new Date().toISOString().split('T')[0], type_of_work: '', amount: '', bill_no: '', status: 'Pending', notes: '' }); }} className="bg-gradient-to-r from-green-600 to-green-600 hover:from-green-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm"><Plus size={16}/>Add Payment</button>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-auto p-3 lg:p-4">
-
-          {/* Stats Cards */}
           {!showTrash && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-3 shadow-md text-white">
-                <p className="text-xs opacity-90 font-medium mb-1">Received</p>
-                <p className="text-2xl font-bold">₹{(totalReceived / 100000).toFixed(2)}L</p>
-                <p className="text-xs opacity-75 mt-1">{payments.filter(p => p.status === 'Received').length} payments</p>
-              </div>
-              <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg p-3 shadow-md text-white">
-                <p className="text-xs opacity-90 font-medium mb-1">Pending</p>
-                <p className="text-2xl font-bold">₹{(totalPending / 100000).toFixed(2)}L</p>
-                <p className="text-xs opacity-75 mt-1">{payments.filter(p => p.status === 'Pending').length} payments</p>
-              </div>
-              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-3 shadow-md text-white">
-                <p className="text-xs opacity-90 font-medium mb-1">Partial</p>
-                <p className="text-2xl font-bold">₹{(totalPartial / 100000).toFixed(2)}L</p>
-                <p className="text-xs opacity-75 mt-1">{payments.filter(p => p.status === 'Partial').length} due</p>
-              </div>
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-3 shadow-md text-white">
-                <p className="text-xs opacity-90 font-medium mb-1">Total</p>
-                <p className="text-2xl font-bold">₹{(totalAmount / 100000).toFixed(2)}L</p>
-                <p className="text-xs opacity-75 mt-1">{payments.length} records</p>
-              </div>
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-3 text-white"><p className="text-xs opacity-90">Paid</p><p className="text-2xl font-bold">₹{paidAmount.toLocaleString()}</p></div>
+              <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg p-3 text-white"><p className="text-xs opacity-90">Pending</p><p className="text-2xl font-bold">₹{pendingAmount.toLocaleString()}</p></div>
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-3 text-white"><p className="text-xs opacity-90">Partially Paid</p><p className="text-2xl font-bold">₹{partialAmount.toLocaleString()}</p></div>
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-3 text-white"><p className="text-xs opacity-90">Total</p><p className="text-2xl font-bold">₹{totalAmount.toLocaleString()}</p></div>
             </div>
           )}
 
-          {/* Action Bar */}
-          {/* Action Bar */}
-{!showTrash && (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 mb-4">
-    {/* Search and Action Buttons */}
-    <div className="flex flex-col lg:flex-row gap-2">
-      {/* Search - Fixed Width */}
-      <div className="w-full lg:w-150 flex-shrink-0">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-          />
-        </div>
-      </div>
-
-      {/* Larger Buttons */}
-      <div className="flex gap-2 flex-wrap flex-1">
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2"
-        >
-          <Filter size={18} />
-          <span>Filter</span>
-        </button>
-
-        <button
-          onClick={handleExportExcel}
-          className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center gap-2"
-        >
-          <Download size={18} />
-          <span>Excel</span>
-        </button>
-
-        <button
-          onClick={handleExportCSV}
-          className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2"
-        >
-          <Download size={18} />
-          <span>CSV</span>
-        </button>
-
-        <label className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer">
-          <Upload size={18} />
-          <span>Import</span>
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
-        </label>
-
-        {lastImportedIds.length > 0 && (
-          <button
-            onClick={handleUndoImport}
-            className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-sm font-medium flex items-center gap-2"
-          >
-            <RotateCcw size={18} />
-            <span>Undo</span>
-          </button>
-        )}
-
-        <button
-          onClick={() => setShowTrash(!showTrash)}
-          className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium flex items-center gap-2"
-        >
-          <Trash size={18} />
-          <span>Trash ({trashedPayments.length})</span>
-        </button>
-      </div>
-    </div>
-
-    {/* Filters Panel */}
-    {showFilters && (
-      <div className="mt-3 pt-3 border-t border-gray-200">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          <select name="status" value={filters.status} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
-            <option value="">All Status</option>
-            <option value="Received">Received</option>
-            <option value="Pending">Pending</option>
-            <option value="Partial">Partial</option>
-          </select>
-          <select name="category" value={filters.category} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
-            <option value="">All Categories</option>
-            {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select name="payment_mode" value={filters.payment_mode} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white">
-            <option value="">All Payment Modes</option>
-            {uniquePaymentModes.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <input type="date" name="date_from" value={filters.date_from} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white" placeholder="From Date" />
-          <input type="date" name="date_to" value={filters.date_to} onChange={handleFilterChange} className="px-2 py-1.5 border rounded text-xs text-gray-800 bg-white" placeholder="To Date" />
-          <button onClick={clearFilters} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium">
-            Clear
-          </button>
-        </div>
-      </div>
-    )}
-
-    {/* Bulk Actions */}
-    {selectedPayments.length > 0 && (
-      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-        <p className="text-xs text-gray-600 font-medium">{selectedPayments.length} selected</p>
-        <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1">
-          <Trash size={14} />
-          Delete
-        </button>
-      </div>
-    )}
-  </div>
-)}
-
-
-              {/* Table Section */}
-              {!showTrash ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gradient-to-r from-green-600 to-green-600 text-white">
-                        <tr>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={selectedPayments.length === currentPayments.length && currentPayments.length > 0}
-                              onChange={handleSelectAll}
-                              className="w-3 h-3 rounded cursor-pointer"
-                            />
-                          </th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">S.No</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Customer Name</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Phone</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Invoice No</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Date</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Total Amount</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Paid Amount</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Due Amount</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Payment Mode</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Category</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Status</th>
-                          <th className="p-2 text-left font-semibold whitespace-nowrap">Notes</th>
-                          <th className="p-2 text-center font-semibold whitespace-nowrap">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentPayments.length === 0 ? (
-                          <tr>
-                            <td colSpan={14} className="p-8 text-center text-gray-500">
-                              <div className="flex flex-col items-center gap-2">
-                                <AlertCircle size={32} className="text-gray-400" />
-                                <p className="text-sm">No payment records found</p>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          currentPayments.map((payment, index) => (
-                            <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                              <td className="p-2">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedPayments.includes(payment.id)}
-                                  onChange={() => togglePaymentSelection(payment.id)}
-                                  className="w-3 h-3 rounded cursor-pointer"
-                                />
-                              </td>
-                              <td className="p-2 text-gray-600 whitespace-nowrap">{indexOfFirstItem + index + 1}</td>
-                              <td className="p-2 font-medium text-gray-900 whitespace-nowrap">{payment.customer_name}</td>
-                              <td className="p-2 text-gray-600 whitespace-nowrap">{payment.phone}</td>
-                              <td className="p-2 text-blue-600 font-medium whitespace-nowrap">{payment.invoice_number || '-'}</td>
-                              <td className="p-2 text-gray-600 whitespace-nowrap">{formatDateToDisplay(payment.payment_date)}</td>
-                              <td className="p-2 text-gray-900 font-semibold whitespace-nowrap">₹{(payment.total_amount || 0).toLocaleString()}</td>
-                              <td className="p-2 text-green-700 font-semibold whitespace-nowrap">₹{(payment.paid_amount || 0).toLocaleString()}</td>
-                              <td className="p-2 text-red-700 font-semibold whitespace-nowrap">₹{(payment.due_amount || 0).toLocaleString()}</td>
-                              <td className="p-2 whitespace-nowrap">
-                                <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                                  {payment.payment_mode}
-                                </span>
-                              </td>
-                              <td className="p-2 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded text-xs ${getCategoryColor(payment.category)}`}>
-                                  {payment.category}
-                                </span>
-                              </td>
-                              <td className="p-2 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(payment.status)}`}>
-                                  {payment.status}
-                                </span>
-                              </td>
-                              <td className="p-2 whitespace-nowrap">
-                                {payment.notes ? (
-                                  <button
-                                    onClick={() => showNotes(payment.notes)}
-                                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                  >
-                                    <Eye size={14} />
-                                  </button>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">-</span>
-                                )}
-                              </td>
-                              <td className="p-2 whitespace-nowrap">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={() => handleEdit(payment)}
-                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(payment.id)}
-                                    className="p-1 text-orange-600 hover:bg-orange-50 rounded transition-colors"
-                                    title="Move to Trash (Auto-delete in 7 days)"
-                                  >
-                                    <Trash size={14} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+          {/* Sticky Filter + Action Bar - REDESIGNED */}
+          {!showTrash && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 mb-4 sticky top-0 z-40 bg-white/90 backdrop-blur-sm">
+              
+              {/* Row 1: Search + Action Buttons */}
+              <div className="flex flex-col lg:flex-row gap-2 mb-2">
+                
+                {/* Search */}
+                <div className="flex-1 min-w-0">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-green-500 focus:border-green-500 text-gray-800"
+                    />
                   </div>
-
-                  {/* Pagination */}
-                  {renderPagination()}
                 </div>
-              ) : (
-                /* Trash Section */
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-800">🗑️ Trash Bin</h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowTrash(false)}
-                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm font-medium"
-                      >
-                        Back
-                      </button>
-                      <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded text-xs font-medium flex items-center">
-                        ⏰ Auto-deletes after 7 days
-                      </div>
-                    </div>
-                  </div>
 
-                  {trashedPayments.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Trash size={48} className="mx-auto text-gray-300 mb-3" />
-                      <p className="text-gray-500">Trash is empty</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th className="p-2 text-left font-semibold whitespace-nowrap">Customer</th>
-                            <th className="p-2 text-left font-semibold whitespace-nowrap">Phone</th>
-                            <th className="p-2 text-left font-semibold whitespace-nowrap">Amount</th>
-                            <th className="p-2 text-left font-semibold whitespace-nowrap">Status</th>
-                            <th className="p-2 text-left font-semibold whitespace-nowrap">Deleted</th>
-                            <th className="p-2 text-center font-semibold whitespace-nowrap">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {trashedPayments.map((payment) => (
-                            <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="p-2 text-gray-900 whitespace-nowrap">{payment.customer_name}</td>
-                              <td className="p-2 text-gray-600 whitespace-nowrap">{payment.phone}</td>
-                              <td className="p-2 text-gray-900 font-semibold whitespace-nowrap">₹{(payment.total_amount || 0).toLocaleString()}</td>
-                              <td className="p-2 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(payment.status)}`}>
-                                  {payment.status}
-                                </span>
-                              </td>
-                              <td className="p-2 text-gray-600 whitespace-nowrap">
-                                {payment.deleted_at ? formatDateToDisplay(payment.deleted_at.split('T')[0]) : '-'}
-                              </td>
-                              <td className="p-2 whitespace-nowrap">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={() => handleRestore(payment.id)}
-                                    className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium"
-                                  >
-                                    Restore
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                {/* Buttons */}
+                <div className="flex gap-1.5 flex-wrap flex-shrink-0">
+                  <button
+                    onClick={handleExportExcel}
+                    className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-medium flex items-center gap-1"
+                  >
+                    <Download size={14} /> Excel
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium flex items-center gap-1"
+                  >
+                    <Download size={14} /> CSV
+                  </button>
+                  <label className="px-2.5 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-xs font-medium flex items-center gap-1 cursor-pointer">
+                    <Upload size={14} /> Import
+                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
+                  </label>
+                  {lastImportedIds.length > 0 && (
+                    <button onClick={handleUndoImport} className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded text-xs font-medium flex items-center gap-1">
+                      <RotateCcw size={14} /> Undo
+                    </button>
                   )}
-                </div>
-              )}
-
-            </main>
-      </div>
-
-      {/* Toast Notifications */}
-      <div className="fixed top-4 right-4 z-[100] space-y-2">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] ${toast.type === 'success' ? 'bg-green-500 text-white' :
-              toast.type === 'error' ? 'bg-red-500 text-white' :
-                toast.type === 'warning' ? 'bg-yellow-500 text-white' :
-                  'bg-blue-500 text-white'
-              }`}
-          >
-            {toast.type === 'success' && <CheckCircle size={20} />}
-            {toast.type === 'error' && <AlertCircle size={20} />}
-            {toast.type === 'warning' && <AlertCircle size={20} />}
-            {toast.type === 'info' && <Info size={20} />}
-            <p className="flex-1 text-sm font-medium">{toast.message}</p>
-            <button
-              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="text-white hover:text-gray-200"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/30 z-[90]"
-            onClick={() => setShowConfirmModal(false)}
-          />
-          <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] pointer-events-none">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full pointer-events-auto">
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <AlertCircle className="text-green-600" size={24} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">Confirm Action</h3>
-                </div>
-                <p className="text-gray-600 mb-6">{confirmAction?.message}</p>
-                <div className="flex gap-3">
                   <button
-                    onClick={handleConfirm}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium"
+                    onClick={() => setShowTrash(true)}
+                    className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium flex items-center gap-1"
                   >
-                    Confirm
-                  </button>
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium"
-                  >
-                    Cancel
+                    <Trash size={14} /> Trash ({trashedPayments.length})
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
 
-      {/* Notes Modal */}
-      {showNotesModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/30 z-[90]"
-            onClick={() => setShowNotesModal(false)}
-          />
-          <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] pointer-events-none">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full pointer-events-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">📝 Notes</h3>
-                  <button
-                    onClick={() => setShowNotesModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                  <p className="text-gray-700 whitespace-pre-wrap text-sm">{selectedNotes || 'No notes available'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Add/Edit Payment Modal */}
-      {showModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/30 z-[90]"
-            onClick={() => {
-              setShowModal(false);
-              setEditingPayment(null);
-            }}
-          />
-          <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] pointer-events-none">
-            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto">
-
-              {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-600 text-white p-4 rounded-t-xl flex items-center justify-between">
-                <h3 className="text-xl font-bold">
-                  {editingPayment ? '✏️ Edit Payment' : '➕ Add New Payment'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingPayment(null);
-                  }}
-                  className="text-white hover:text-gray-200 transition-colors"
+              {/* Row 2: Filters */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
+                <select
+                  name="status"
+                  value={filters.status}
+                  onChange={handleFilterChange}
+                  className="flex-1 min-w-[120px] px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:ring-1 focus:ring-green-500"
                 >
-                  <X size={24} />
+                  <option value="">All Status</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Partially Paid">Partially Paid</option>
+                  <option value="Pending">Pending</option>
+                </select>
+
+                <select
+                  name="type_of_work"
+                  value={filters.type_of_work}
+                  onChange={handleFilterChange}
+                  className="flex-1 min-w-[120px] px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="">All Type</option>
+                  {uniqueWorkTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+
+                <input
+                  type="date"
+                  name="date_from"
+                  value={filters.date_from}
+                  onChange={handleFilterChange}
+                  className="flex-1 min-w-[120px] px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:ring-1 focus:ring-green-500"
+                  placeholder="From Date"
+                />
+
+                <input
+                  type="date"
+                  name="date_to"
+                  value={filters.date_to}
+                  onChange={handleFilterChange}
+                 className="flex-1 min-w-[120px] px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:ring-1 focus:ring-green-500"
+                  placeholder="To Date"
+                />
+
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-medium whitespace-nowrap"
+                >
+                  Clear Filters
                 </button>
               </div>
 
-              {/* Modal Body */}
-              <form onSubmit={handleSubmit} className="p-6">
-
-                {/* Customer Information */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                    👤 Customer Information
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Customer Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="customer_name"
-                        value={formData.customer_name}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="Enter customer name"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="Enter phone number"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Invoice Number
-                      </label>
-                      <input
-                        type="text"
-                        name="invoice_number"
-                        value={formData.invoice_number}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="Enter invoice number (optional)"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Details */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                    💰 Payment Details
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Date <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        name="payment_date"
-                        value={formData.payment_date}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Total Amount <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        name="total_amount"
-                        value={formData.total_amount}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="₹0"
-                        min="0"
-                        step="0.01"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Paid Amount <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        name="paid_amount"
-                        value={formData.paid_amount}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="₹0"
-                        min="0"
-                        step="0.01"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Due Amount Display */}
-                  {formData.total_amount && formData.paid_amount && (
-                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-orange-700">Due Amount:</span>
-                        <span className="text-lg font-bold text-orange-700">
-                          ₹{(parseFloat(formData.total_amount) - parseFloat(formData.paid_amount)).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-orange-600">
-                        Status: <span className="font-semibold">{formData.status}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Payment Method & Category */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                    💳 Payment Method & Category
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Mode <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="payment_mode"
-                        value={formData.payment_mode}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        required
-                      >
-                        <option value="Cash">Cash</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Card">Card</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Transaction ID
-                      </label>
-                      <input
-                        type="text"
-                        name="transaction_id"
-                        value={formData.transaction_id}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="Enter transaction ID"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Category <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="category"
-                        value={formData.category}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        required
-                      >
-                        <option value="Installation">Installation</option>
-                        <option value="AMC">AMC</option>
-                        <option value="Retail">Retail</option>
-                        <option value="Service">Service</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Additional Information */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                    📋 Additional Information
-                  </h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Related To (Order/Invoice)
-                      </label>
-                      <input
-                        type="text"
-                        name="related_to"
-                        value={formData.related_to}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800"
-                        placeholder="Enter related order/invoice number"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <textarea
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-800 resize-none"
-                        placeholder="Add any additional notes..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      setEditingPayment(null);
-                    }}
-                    className="flex-1 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-600 hover:from-green-700 hover:to-green-700 text-white rounded-lg font-medium shadow-md transition-all"
-                  >
-                    {editingPayment ? 'Update Payment' : 'Add Payment'}
+              {/* Bulk Actions (only when items selected) */}
+              {selectedPayments.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
+                  <span className="text-xs font-medium">{selectedPayments.length} selected</span>
+                  <button onClick={handleBulkDelete} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs flex items-center gap-1">
+                    <Trash size={14} /> Delete
                   </button>
                 </div>
-              </form>
+              )}
             </div>
-          </div>
-        </>
-      )}
+          )}
 
+          {/* Table Section */}
+         {!showTrash ? (
+  <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs text-gray-800">
+        
+        {/* HEADER */}
+        <thead className="bg-gradient-to-r from-green-600 to-green-600 text-white border-b border-gray-300">
+          <tr>
+            <th className="p-2">
+              <input
+                type="checkbox"
+                checked={selectedPayments.length === currentPayments.length && currentPayments.length > 0}
+                onChange={handleSelectAll}
+                className="w-3 h-3"
+              />
+            </th>
+            <th className="p-2 text-left">S.No</th>
+            <th className="p-2 text-left">Customer</th>
+            <th className="p-2 text-left">Phone</th>
+            <th className="p-2 text-left">Date</th>
+            <th className="p-2 text-left">Type of Work</th>
+            <th className="p-2 text-left">Amount</th>
+            <th className="p-2 text-left">Bill No.</th>
+            <th className="p-2 text-left">Status</th>
+            <th className="p-2 text-left">Notes</th>
+            <th className="p-2 text-center">Actions</th>
+          </tr>
+        </thead>
+
+        {/* BODY */}
+        <tbody>
+          {currentPayments.length === 0 ? (
+            <tr>
+              <td colSpan={11} className="p-8 text-center text-gray-500">
+                No records found
+              </td>
+            </tr>
+          ) : (
+            currentPayments.map((p, idx) => (
+              <tr
+                key={p.id}
+                className="border-b border-gray-200 bg-white hover:bg-gray-50 transition"
+              >
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedPayments.includes(p.id)}
+                    onChange={() => togglePaymentSelection(p.id)}
+                    className="w-3 h-3"
+                  />
+                </td>
+
+                <td className="p-2 text-gray-800">
+                  {indexOfFirstItem + idx + 1}
+                </td>
+
+                <td className="p-2 font-semibold text-gray-900">
+                  {p.customer_name}
+                </td>
+
+                <td className="p-2 text-gray-800">
+                  {p.phone || '-'}
+                </td>
+
+                <td className="p-2 text-gray-800">
+                  {formatDateToDisplay(p.payment_date)}
+                </td>
+
+                <td className="p-2">
+                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded">
+                    {p.type_of_work}
+                  </span>
+                </td>
+
+                <td className="p-2 font-semibold text-gray-900">
+                  ₹{p.amount.toLocaleString()}
+                </td>
+
+                <td className="p-2 text-gray-800">
+                  {p.bill_no || '-'}
+                </td>
+
+                <td className="p-2">
+                  <span className={`px-2 py-0.5 rounded ${getStatusColor(p.status)}`}>
+                    {p.status}
+                  </span>
+                </td>
+
+                <td className="p-2">
+                  {p.notes ? (
+                    <button
+                      onClick={() => showNotes(p.notes)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  ) : (
+                    '-'
+                  )}
+                </td>
+
+                <td className="p-2 text-center">
+                  <div className="flex gap-1 justify-center">
+                    <button
+                      onClick={() => handleEdit(p)}
+                      className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      className="p-1 text-orange-600 hover:bg-orange-50 rounded"
+                    >
+                      <Trash size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    {renderPagination()}
+  </div>
+) : (
+            <div className="bg-white rounded-lg shadow-sm border p-4">
+              <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold">🗑️ Trash Bin</h3><button onClick={() => setShowTrash(false)} className="px-3 py-1.5 bg-gray-200 rounded text-sm">Back</button></div>
+              {trashedPayments.length === 0 ? <div className="text-center py-12"><Trash size={48} className="mx-auto text-gray-300"/><p className="text-gray-500">Empty</p></div> : (
+                <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-800 text-white"><tr><th className="p-2 text-left">Customer</th><th className="p-2 text-left">Amount</th><th className="p-2 text-left">Status</th><th className="p-2 text-left">Deleted</th><th className="p-2 text-left">Actions</th></tr></thead><tbody>{trashedPayments.map(p => (<tr key={p.id} className="border-b hover:bg-gray-50"><td className="p-2 text-gray-900">{p.customer_name}</td><td className="p-2 text-gray-900">₹{p.amount.toLocaleString()}</td><td className="p-2"><span className={`px-2 py-0.5 rounded ${getStatusColor(p.status)}`}>{p.status}</span></td><td className="p-2 text-gray-700">{p.deleted_at ? formatDateToDisplay(p.deleted_at.split('T')[0]) : '-'}</td><td className="p-2"><button onClick={() => handleRestore(p.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200">Restore</button></td></tr>))}</tbody></table></div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-[100] space-y-2">{toasts.map(t => (<div key={t.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg ${t.type==='success'?'bg-green-500':t.type==='error'?'bg-red-500':t.type==='warning'?'bg-yellow-500':'bg-blue-500'} text-white`}>{t.type==='success'&&<CheckCircle size={20}/>}{t.type==='error'&&<AlertCircle size={20}/>}{t.type==='warning'&&<AlertCircle size={20}/>}{t.type==='info'&&<Info size={20}/>}<p className="text-sm">{t.message}</p><button onClick={()=>setToasts(prev=>prev.filter(t2=>t2.id!==t.id))}><X size={16}/></button></div>))}</div>
+
+      {/* Confirm Modal */}
+      {showConfirmModal && (<><div className="fixed inset-0 bg-black/30 z-[90]" onClick={()=>setShowConfirmModal(false)}/><div className="fixed inset-0 flex items-center justify-center p-4 z-[90]"><div className="bg-white rounded-xl max-w-md w-full p-6"><div className="flex items-center gap-3 mb-4"><div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center"><AlertCircle className="text-green-600" size={24}/></div><h3 className="text-lg font-bold">Confirm Action</h3></div><p className="text-gray-600 mb-6">{confirmAction?.message}</p><div className="flex gap-3"><button onClick={handleConfirm} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-medium">Confirm</button><button onClick={()=>setShowConfirmModal(false)} className="flex-1 bg-gray-200 py-2 rounded-lg font-medium">Cancel</button></div></div></div></>)}
+
+      {/* Notes Modal */}
+      {showNotesModal && (<><div className="fixed inset-0 bg-black/30 z-[90]" onClick={()=>setShowNotesModal(false)}/><div className="fixed inset-0 flex items-center justify-center p-4 z-[90]"><div className="bg-white rounded-xl max-w-lg w-full p-6"><div className="flex justify-between mb-4"><h3 className="text-lg font-bold">📝 Notes</h3><button onClick={()=>setShowNotesModal(false)}><X size={20}/></button></div><div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"><p className="text-gray-700 whitespace-pre-wrap text-sm">{selectedNotes || 'No notes'}</p></div></div></div></>)}
+
+      
+{/* Add/Edit Modal */}
+{showModal && (
+  <>
+    <div
+      className="fixed inset-0 bg-black/30 z-[90]"
+      onClick={() => {
+        setShowModal(false);
+        setEditingPayment(null);
+      }}
+    />
+
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-[90] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+
+        {/* HEADER */}
+        <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-600 text-white p-4 rounded-t-xl flex justify-between">
+          <h3 className="text-xl font-bold">
+            {editingPayment ? '✏️ Edit Payment' : '➕ Add Payment'}
+          </h3>
+          <button onClick={() => { setShowModal(false); setEditingPayment(null); }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* FORM */}
+        <form onSubmit={handleSubmit} className="p-6">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Customer Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Customer Name *
+              </label>
+              <input
+                type="text"
+                name="customer_name"
+                value={formData.customer_name}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 bg-white focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Phone (Optional)
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 bg-white focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Date *
+              </label>
+              <input
+                type="date"
+                name="payment_date"
+                value={formData.payment_date}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+
+            {/* Type of Work */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Type of Work *
+              </label>
+              <input
+                type="text"
+                name="type_of_work"
+                value={formData.type_of_work}
+                onChange={handleInputChange}
+                placeholder="e.g., Installation, Lock installation, CCTV..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 bg-white focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+
+            {/* Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Amount (₹) *
+              </label>
+              <input
+                type="number"
+                name="amount"
+                value={formData.amount}
+                onChange={handleInputChange}
+                placeholder="0"
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 bg-white focus:ring-2 focus:ring-green-500"
+                required
+              />
+            </div>
+
+            {/* Bill No */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Bill No. (Optional)
+              </label>
+              <input
+                type="text"
+                name="bill_no"
+                value={formData.bill_no}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Status *
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-green-500"
+              >
+                <option value="Paid">Paid</option>
+                <option value="Partially Paid">Partially Paid</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Notes (for partial payments, write split amounts)
+              </label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="e.g., 2000 paid cash, 6000 remaining..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 bg-white focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+          </div>
+
+          {/* BUTTONS */}
+          <div className="flex gap-3 mt-6 pt-4 border-t">
+            <button
+              type="button"
+              onClick={() => { setShowModal(false); setEditingPayment(null); }}
+              className="flex-1 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium shadow-md"
+            >
+              {editingPayment ? 'Update' : 'Add'}
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </>
+)}
     </div>
   );
 }
