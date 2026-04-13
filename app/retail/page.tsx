@@ -656,34 +656,51 @@ export default function RetailPage() {
   // ============================================
 
   const filteredRecords = records.filter(record => {
-    const matchesSearch = record.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.phone.includes(searchTerm) ||
-      record.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.product_category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.work_description.toLowerCase().includes(searchTerm.toLowerCase());
+  const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
 
-    if (!matchesSearch) return false;
-    if (filters.customer_name && !record.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
-    if (filters.phone && !record.phone.includes(filters.phone)) return false;
-    if (filters.product_category && record.product_category !== filters.product_category) return false;
-    if (filters.date_from && record.work_date < filters.date_from) return false;
-    if (filters.date_to && record.work_date > filters.date_to) return false;
-    if (filters.done_by && record.done_by !== filters.done_by) return false;
-    if (filters.record_status && record.record_status !== filters.record_status) return false;
-    if (filters.record_state && record.record_state !== filters.record_state) return false;
-    return true;
-  });
+  const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
+    (record.customer_name || "").toLowerCase().includes(keyword) ||
+    (record.phone || "").includes(keyword) ||
+    (record.location || "").toLowerCase().includes(keyword) ||
+    (record.product_category || "").toLowerCase().includes(keyword) ||
+    (record.work_description || "").toLowerCase().includes(keyword) ||
+    (record.device_model || "").toLowerCase().includes(keyword) ||
+    (record.device_serial_number || "").toLowerCase().includes(keyword)
+  );
 
-  const filteredTrashRecords = trashedRecords.filter(record => {
-    const matchesSearch = record.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.phone.includes(searchTerm) ||
-      record.location.toLowerCase().includes(searchTerm.toLowerCase());
-    if (!matchesSearch) return false;
-    if (filters.product_category && record.product_category !== filters.product_category) return false;
-    if (filters.date_from && record.work_date < filters.date_from) return false;
-    if (filters.date_to && record.work_date > filters.date_to) return false;
-    return true;
-  });
+  if (!matchesSearch) return false;
+
+  if (filters.customer_name && !record.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
+  if (filters.phone && !record.phone.includes(filters.phone)) return false;
+  if (filters.product_category && record.product_category !== filters.product_category) return false;
+  if (filters.date_from && record.work_date < filters.date_from) return false;
+  if (filters.date_to && record.work_date > filters.date_to) return false;
+  if (filters.done_by && record.done_by !== filters.done_by) return false;
+  if (filters.record_status && record.record_status !== filters.record_status) return false;
+  if (filters.record_state && record.record_state !== filters.record_state) return false;
+
+  return true;
+});
+
+ const filteredTrashRecords = trashedRecords.filter(record => {
+  const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
+
+  const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
+    (record.customer_name || "").toLowerCase().includes(keyword) ||
+    (record.phone || "").includes(keyword) ||
+    (record.location || "").toLowerCase().includes(keyword) ||
+    (record.device_model || "").toLowerCase().includes(keyword) ||
+    (record.device_serial_number || "").toLowerCase().includes(keyword)
+  );
+
+  if (!matchesSearch) return false;
+
+  if (filters.product_category && record.product_category !== filters.product_category) return false;
+  if (filters.date_from && record.work_date < filters.date_from) return false;
+  if (filters.date_to && record.work_date > filters.date_to) return false;
+
+  return true;
+});
 
   const currentDataSource = showTrash ? filteredTrashRecords : filteredRecords;
   const indexOfLastItem = currentPage * itemsPerPage;
