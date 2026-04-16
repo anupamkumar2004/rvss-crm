@@ -656,51 +656,51 @@ export default function RetailPage() {
   // ============================================
 
   const filteredRecords = records.filter(record => {
-  const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
+    const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
 
-  const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
-    (record.customer_name || "").toLowerCase().includes(keyword) ||
-    (record.phone || "").includes(keyword) ||
-    (record.location || "").toLowerCase().includes(keyword) ||
-    (record.product_category || "").toLowerCase().includes(keyword) ||
-    (record.work_description || "").toLowerCase().includes(keyword) ||
-    (record.device_model || "").toLowerCase().includes(keyword) ||
-    (record.device_serial_number || "").toLowerCase().includes(keyword)
-  );
+    const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
+      (record.customer_name || "").toLowerCase().includes(keyword) ||
+      (record.phone || "").includes(keyword) ||
+      (record.location || "").toLowerCase().includes(keyword) ||
+      (record.product_category || "").toLowerCase().includes(keyword) ||
+      (record.work_description || "").toLowerCase().includes(keyword) ||
+      (record.device_model || "").toLowerCase().includes(keyword) ||
+      (record.device_serial_number || "").toLowerCase().includes(keyword)
+    );
 
-  if (!matchesSearch) return false;
+    if (!matchesSearch) return false;
 
-  if (filters.customer_name && !record.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
-  if (filters.phone && !record.phone.includes(filters.phone)) return false;
-  if (filters.product_category && record.product_category !== filters.product_category) return false;
-  if (filters.date_from && record.work_date < filters.date_from) return false;
-  if (filters.date_to && record.work_date > filters.date_to) return false;
-  if (filters.done_by && record.done_by !== filters.done_by) return false;
-  if (filters.record_status && record.record_status !== filters.record_status) return false;
-  if (filters.record_state && record.record_state !== filters.record_state) return false;
+    if (filters.customer_name && !record.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) return false;
+    if (filters.phone && !record.phone.includes(filters.phone)) return false;
+    if (filters.product_category && record.product_category !== filters.product_category) return false;
+    if (filters.date_from && record.work_date < filters.date_from) return false;
+    if (filters.date_to && record.work_date > filters.date_to) return false;
+    if (filters.done_by && record.done_by !== filters.done_by) return false;
+    if (filters.record_status && record.record_status !== filters.record_status) return false;
+    if (filters.record_state && record.record_state !== filters.record_state) return false;
 
-  return true;
-});
+    return true;
+  });
 
- const filteredTrashRecords = trashedRecords.filter(record => {
-  const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
+  const filteredTrashRecords = trashedRecords.filter(record => {
+    const keywords = searchTerm.toLowerCase().split(" ").filter(k => k);
 
-  const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
-    (record.customer_name || "").toLowerCase().includes(keyword) ||
-    (record.phone || "").includes(keyword) ||
-    (record.location || "").toLowerCase().includes(keyword) ||
-    (record.device_model || "").toLowerCase().includes(keyword) ||
-    (record.device_serial_number || "").toLowerCase().includes(keyword)
-  );
+    const matchesSearch = keywords.length === 0 || keywords.some(keyword =>
+      (record.customer_name || "").toLowerCase().includes(keyword) ||
+      (record.phone || "").includes(keyword) ||
+      (record.location || "").toLowerCase().includes(keyword) ||
+      (record.device_model || "").toLowerCase().includes(keyword) ||
+      (record.device_serial_number || "").toLowerCase().includes(keyword)
+    );
 
-  if (!matchesSearch) return false;
+    if (!matchesSearch) return false;
 
-  if (filters.product_category && record.product_category !== filters.product_category) return false;
-  if (filters.date_from && record.work_date < filters.date_from) return false;
-  if (filters.date_to && record.work_date > filters.date_to) return false;
+    if (filters.product_category && record.product_category !== filters.product_category) return false;
+    if (filters.date_from && record.work_date < filters.date_from) return false;
+    if (filters.date_to && record.work_date > filters.date_to) return false;
 
-  return true;
-});
+    return true;
+  });
 
   const currentDataSource = showTrash ? filteredTrashRecords : filteredRecords;
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -891,7 +891,26 @@ export default function RetailPage() {
                             <div className="text-xs text-gray-600">{record.phone}</div>
                             <div className="text-xs text-gray-600">{record.location}</div>
                           </td>
-                          <td className="p-2 text-gray-900">{record.product_category}<br />{record.device_model && <span className="text-xs text-gray-600">{record.device_model}</span>}</td>
+                          <td className="p-2 text-gray-900">
+                            {/* Product Category */}
+                            <div className="font-medium">
+                              {record.product_category}
+                            </div>
+
+                            {/* Device Model */}
+                            {record.device_model && (
+                              <div className="text-xs text-gray-600">
+                                {record.device_model}
+                              </div>
+                            )}
+
+                            {/* Device Serial Number */}
+                            {record.device_serial_number && (
+                              <div className="text-xs text-gray-500 italic">
+                                SN: {record.device_serial_number}
+                              </div>
+                            )}
+                          </td>
                           <td className="p-2 text-gray-900">{record.work_type}</td>
                           <td className="p-2 max-w-xs truncate text-gray-900" title={record.work_description}>{record.work_description.length > 40 ? record.work_description.substring(0, 40) + '...' : record.work_description}</td>
                           <td className="p-2 font-semibold text-gray-900">₹{record.amount_quoted.toLocaleString()}</td>
